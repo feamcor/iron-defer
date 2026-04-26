@@ -1,0 +1,255 @@
+# generated: 2026-04-04
+# last_updated: 2026-04-26
+# (Growth Phase retrospective done 2026-04-26: combined retro for Epics 9-12; release cleanup plan with 3 tiers; epics 9,10,11 → done; all 4 retros → done)
+# (Story 12-1 dev complete 2026-04-25: ctx.suspend(), POST /tasks/{id}/signal, sweeper watchdog, 7 integration tests; status → review)
+# (Story 12-1 dev started 2026-04-25: HITL suspend/resume — ctx.suspend(), POST /tasks/{id}/signal, sweeper watchdog; status → in-progress)
+# (Story 12-0 dev complete 2026-04-25: Suspended variant, 9 match-arm sites, schema columns, sqlx cache, cancel handler; status → review)
+# (Story 12-0 dev started 2026-04-25: TaskStatus expansion spike — Suspended variant, match arms, schema columns; status → in-progress)
+# (All Epic 12 stories context created 2026-04-25: TaskStatus spike, HITL suspend/resume, geographic pinning, E2E tests + benchmarks; epic-12 → in-progress; stories → ready-for-dev)
+# (Story 11-3 dev complete 2026-04-25: 7 E2E checkpoint tests + latency benchmark — crash recovery, sweeper, audit, REST visibility; status → review)
+# (Story 11-2 code review done 2026-04-25: 1 decision + 2 patches applied; status → done)
+# (Story 11-2 dev complete 2026-04-25: UNLOGGED table mode — runtime conversion, FK constraint handling, 6 integration tests, Criterion benchmark, docs; status → review)
+# (Story 11-2 dev started 2026-04-25: UNLOGGED table mode; status → in-progress)
+# (Story 11-1 code review done 2026-04-25: 14 patches applied across Groups 1-4; status → done)
+# (Story 11-1 dev complete 2026-04-25: checkpoint/resume — migration, domain CheckpointWriter trait, TaskContext API, PostgresCheckpointWriter, worker dispatch, REST response, 6 integration tests, pre-existing RetryCountingTask fix; status → review)
+# (All Epic 11 stories context created 2026-04-25: checkpoint/resume, UNLOGGED table mode, E2E tests + benchmarks; epic-11 → in-progress; stories → ready-for-dev)
+# (Story 10-3 code review done 2026-04-24: 10 patches applied including trigger removal; status → done)
+# (Story 10-3 dev complete 2026-04-24: 12 compliance E2E tests — trace propagation, audit completeness, immutability, atomicity, OTel events, benchmark; 5 pre-existing test fixes; status → review)
+# (Story 10-3 dev started 2026-04-24: compliance E2E tests — traces, audit log, immutability, atomicity; status → in-progress)
+# (Story 10-2 dev complete 2026-04-24: append-only audit log — migration, 9 state-transition wraps, REST endpoint, 8 integration tests; status → review)
+# (Story 10-2 dev started 2026-04-24: append-only audit log; status → in-progress)
+# (Story 10-1 code review done 2026-04-24: status → done)
+# (Story 10-1 dev complete 2026-04-24: OTel distributed traces — W3C traceparent, spans, state transition events, 5 integration tests; status → review)
+# (Story 10-1 dev started 2026-04-24: OTel distributed traces — W3C traceparent, spans, state events; status → in-progress)
+# (Story 9-3 code review done 2026-04-24: clean review, all layers passed; status → done)
+# (Story 9-3 dev complete 2026-04-24: 4 E2E tests + 2 Criterion benchmark groups; status → review)
+# (Story 9-3 dev started 2026-04-24: submission safety E2E tests & benchmarks; status → in-progress)
+# (Story 9-2 dev complete 2026-04-24: transactional enqueue — save_in_tx, enqueue_in_tx, 4 integration tests, pre-existing fixes; status → review)
+# (Story 9-2 dev started 2026-04-24: transactional enqueue; status → in-progress)
+# (All Epic 10 stories context created 2026-04-24: OTel traces, audit log, compliance E2E tests; epic-10 → in-progress; stories → ready-for-dev)
+# (Story 10-1 context created 2026-04-24: OTel distributed traces — W3C traceparent, span creation, state transition events; epic-10 → in-progress; story → ready-for-dev)
+# (Story 9-1 dev complete 2026-04-24: idempotency key schema, submission, 6 integration tests, all 10 tasks done; status → review)
+# (Story 9-1 dev started 2026-04-24: idempotency key schema & submission; status → in-progress)
+# (All Epic 9 stories context created 2026-04-24: idempotency keys, transactional enqueue, E2E tests + benchmarks; epic-9 → in-progress; stories → ready-for-dev)
+# (Growth sprint planning 2026-04-24: Epics 9-12 added — 4 epics, 13 stories, 22 FRs, 8 NFRs; strictly serial: 9→10→11→12)
+# (Epic 8 retrospective done 2026-04-24: 5 stories reviewed, Growth phase decision captured; epic-8 closed)
+# (Story 8-5 dev complete 2026-04-24: 6 guides + docs index + README links + cross-ref validation; status → review)
+# (Story 8-4 dev complete 2026-04-24: README rewrite + 2 new examples (retry, multi-queue); status → review)
+# (Story 8-3 dev complete 2026-04-24: observability & resilience E2E — queue stats, metrics, readiness outage, data integrity; status → review)
+# (Story 8-2 dev complete 2026-04-24: E2E test infrastructure + 8 tests across lifecycle/REST/CLI/consistency; status → review)
+# (Stories 8-2, 8-3, 8-4, 8-5 context created 2026-04-24: E2E tests, README/examples, guides/docs; stories → ready-for-dev)
+# (Story 8-1 code review done 2026-04-24: 2 patches applied; status → done)
+# (Story 8-1 dev complete 2026-04-24: architecture reconciled, engineering standards added, 25+ comment refs updated; status → review)
+# (Story 8-1 dev started 2026-04-24: architecture reconciliation & engineering standards; status → in-progress)
+# (Story 8-1 context created 2026-04-24: architecture reconciliation & engineering standards; epic-8 → in-progress; story → ready-for-dev)
+# (Stories 7-3, 7-4, 7-5 context created 2026-04-23: pool hardening, K8s/Docker, CI/validation; stories → ready-for-dev)
+# (Story 7-2 context created 2026-04-23: payload ownership & dispatch performance; story → ready-for-dev)
+# (Story 7-1 context created 2026-04-23: API query hardening; epic-7 → in-progress; story → ready-for-dev)
+# (Story 6-10 dev started 2026-04-23: field visibility & accessor methods; status → in-progress)
+# (Story 6-10 dev complete 2026-04-23: private fields + typed accessors for TaskRecord & TaskContext; status → review)
+# (Epic 6 retrospective done 2026-04-23: 10 stories reviewed, 14 deferred items captured in Story 6.11)
+# (Story 6-11 created 2026-04-23: deferred work sweep — 14 items across scrubbing rework + hygiene fixes; status → ready-for-dev)
+# (Story 6-11 dev started 2026-04-23: deferred work sweep; status → in-progress)
+# (Story 6-11 dev complete 2026-04-23: all 14 deferred items resolved; status → review)
+# (Story 6-11 code review done 2026-04-23: 2 patches applied, 1 deferred; status → done)
+# (Story 6-9 code review done 2026-04-23: 1 decision resolved + 3 patches applied; status → done)
+# (Story 6-7 code review done 2026-04-23: status → done)
+# (Story 6-3 code review done 2026-04-23: 1 patch applied, 6 dismissed; status → done)
+# (Story 6-3 dev complete 2026-04-23: atomic CTE cancel + #[non_exhaustive] TaskStatus + explicit match arms; status → review)
+# (Story 6-3 context created 2026-04-23: cancel path & TaskStatus hardening; story → ready-for-dev)
+# (Story 6-4 context created 2026-04-23: sweeper atomicity & observability; story → ready-for-dev)
+# (Story 6-4 dev started 2026-04-23: sweeper atomicity & observability; status → in-progress)
+# (Story 6-4 dev complete 2026-04-23: atomic tx recovery + per-queue metrics + rate-limited logging; status → review)
+# (Story 6-5 context created 2026-04-23: worker poll loop resilience; story → ready-for-dev)
+# (Story 6-5 dev started 2026-04-23: worker poll loop resilience; status → in-progress)
+# (Story 6-5 dev complete 2026-04-23: jittered backoff + claim racing against cancellation; status → review)
+# (Story 6-6 context created 2026-04-23: error model restructuring; story → ready-for-dev)
+# (Story 6-6 dev started 2026-04-23: error model restructuring; status → in-progress)
+# (Story 6-6 dev complete 2026-04-23: structured PayloadErrorKind + ExecutionErrorKind + Migration variant; status → done)
+# (Story 6-7 context created 2026-04-23: error payload scrubbing; story → ready-for-dev)
+# (Story 6-7 dev started 2026-04-23: error payload scrubbing; status → in-progress)
+# (Story 6-7 dev complete 2026-04-23: scrub_database_message + DatabaseScrubbed variant + is_pool_timeout update; status → review)
+# (Story 6-8 code review done 2026-04-23: surgical release + total count fix; status → done)
+# (Story 6-8 context created 2026-04-23: state transition & validation edge cases; story → ready-for-dev)
+# (Story 6-8 dev started 2026-04-23: state transition & validation edge cases; status → in-progress)
+# (Story 6-8 dev complete 2026-04-23: window function, scheduled_at validation, claim-cancel check, release attempts; status → review)
+# (Story 6-9 context created 2026-04-23: builder pattern & dependency setup; story → ready-for-dev)
+# (Story 6-10 context created 2026-04-23: field visibility & accessor methods; story → ready-for-dev)
+# (Story 6-9 dev started 2026-04-23: builder pattern & dependency setup; status → in-progress)
+# (Story 6-9 dev complete 2026-04-23: bon builders for TaskRecord/WorkerService + DispatchContext; status → review)
+# (Epic 1A complete: 1a-1, 1a-2, 1a-3 all done as of 2026-04-06; retrospective done; epic 1a closed)
+# (Story 3-2 code review done 2026-04-19: 1 decision + 11 patches applied; status → done)
+# (Story 3-3 context created 2026-04-19: audit trail + OTel compliance tests; status → ready-for-dev)
+# (Story 3-3 dev started 2026-04-19: status → in-progress)
+# (Story 3-3 dev complete 2026-04-19: 10 ACs + 11 tasks; status → review)
+# (Story 3-3 code review done 2026-04-19: 4 patches applied + 6 deferred + 6 dismissed; status → done)
+# (Retrospective 2026-04-21: combined retro for Epics 1B, 2, 3; all three epics closed; preparation sprint planned before Epic 4)
+# (Story 4-1 context created 2026-04-21: health probes + task cancellation; epic-4 → in-progress; story → ready-for-dev)
+# (Story 4-2 context created 2026-04-21: REST API list tasks, queue stats, OpenAPI spec; story → ready-for-dev)
+# (Story 4-3 context created 2026-04-21: CLI submit, inspect, validate; story → ready-for-dev)
+# (Story 5-1 context created 2026-04-21: Docker & Kubernetes deployment; epic-5 → in-progress; story → ready-for-dev)
+# (Story 5-2 context created 2026-04-21: feature flags & config enforcement; story → ready-for-dev)
+# (Story 5-3 context created 2026-04-21: chaos tests, benchmarks, examples; story → ready-for-dev)
+# (Retrospective 2026-04-22: combined retro for Epics 4, 5; both epics closed; pre-release cleanup epic planned with 8 work packages, 57 items)
+# (Sprint planning 2026-04-22: Epics 6-8 added — pre-release cleanup, 20 stories, 56 CRs; strictly serial: 6→7→8)
+# (Story 6-1 context created 2026-04-22: timing-dependent test stabilization; epic-6 → in-progress; story → ready-for-dev)
+# (Story 6-1 code review done 2026-04-22: 3 decisions + 1 patch applied, 4 dismissed; status → done)
+# (Story 6-2 context created 2026-04-22: test infra fixes + missing coverage; story → ready-for-dev)
+# (Story 6-2 code review done 2026-04-22: 1 patch applied, 9 dismissed; status → done)
+# project: iron-defer
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: docs/artifacts/implementation
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-04-04
+last_updated: 2026-04-26
+project: iron-defer
+project_key: NOKEY
+tracking_system: file-system
+story_location: docs/artifacts/implementation
+
+development_status:
+  # Epic 1A: Task Persistence & Domain Model
+  epic-1a: done
+  1a-1-workspace-scaffolding-and-domain-model: done
+  1a-2-postgres-schema-and-task-repository: done
+  1a-3-task-submission-and-retrieval-via-library-api: done
+  epic-1a-retrospective: done
+
+  # Epic 1B: Claiming & Execution Engine
+  epic-1b: done
+  1b-1-atomic-claiming-and-task-completion: done
+  1b-2-worker-pool-and-execution-loop: done
+  1b-3-rest-api-submit-and-query-tasks: done
+  epic-1b-retrospective: done
+
+  # Epic 2: Resilience & Recovery
+  epic-2: done
+  2-1-sweeper-zombie-task-recovery: done
+  2-2-graceful-shutdown-and-lease-release: done
+  2-3-postgres-auto-reconnection: done
+  epic-2-retrospective: done
+
+  # Epic 3: Observability & Compliance
+  epic-3: done
+  3-1-structured-logging-and-payload-privacy: done
+  3-2-otel-metrics-and-prometheus-endpoint: done
+  3-3-audit-trail-and-otel-compliance-tests: done
+  epic-3-retrospective: done
+
+  # Epic 4: Operator Interface
+  epic-4: done
+  4-1-health-probes-and-task-cancellation: done
+  4-2-rest-api-list-tasks-and-queue-stats: done
+  4-3-cli-submit-inspect-and-validate: done
+  epic-4-retrospective: done
+
+  # Epic 5: Production Readiness
+  epic-5: done
+  5-1-docker-and-kubernetes-deployment: done
+  5-2-feature-flags-and-configuration-enforcement: done
+  5-3-chaos-tests-benchmarks-and-reference-examples: done
+  epic-5-retrospective: done
+
+  # Epic 6: Test Stabilization & Engine Correctness (25 CRs)
+  # Sequence: 6.1-6.2 (test stabilization) → 6.3-6.8 (correctness) → 6.9-6.10 (type hardening)
+  epic-6: done
+  6-1-timing-dependent-test-stabilization: done
+  6-2-test-infrastructure-and-missing-coverage: done
+  6-3-cancel-path-and-taskstatus-hardening: done
+  6-4-sweeper-atomicity-and-observability: done
+  6-5-worker-poll-loop-resilience: done
+  6-6-error-model-restructuring: done
+  6-7-error-payload-scrubbing: done
+  6-8-state-transition-and-validation-edge-cases: done
+  6-9-builder-pattern-and-dependency-setup: done
+  6-10-field-visibility-and-accessor-methods: done
+  6-11-deferred-work-sweep: done
+  epic-6-retrospective: done
+
+  # Epic 7: Production Operations Hardening (19 CRs)
+  # Sequence: 7.1 (API) → 7.2 (performance) → 7.3 (pool/embedded) → 7.4 (K8s/Docker) → 7.5 (CI/validation gate)
+  epic-7: done
+  7-1-api-query-hardening: done
+  7-2-payload-ownership-and-dispatch-performance: done
+  7-3-connection-pool-and-embedded-library-hardening: done
+  7-4-kubernetes-and-docker-manifests: done
+  7-5-ci-safety-gates-and-deployment-validation: done
+  epic-7-retrospective: done
+
+  # Epic 8: End-to-End Verification & Documentation (12 CRs)
+  # Sequence: 8.1 (architecture) → 8.2-8.3 (E2E tests) → 8.4-8.5 (documentation)
+  epic-8: done
+  8-1-architecture-reconciliation-and-engineering-standards: done
+  8-2-core-interface-e2e-tests: done
+  8-3-observability-and-resilience-e2e: done
+  8-4-readme-and-tutorial-examples: done
+  8-5-guides-and-documentation-validation: done
+  epic-8-retrospective: done
+
+  # =========================================================================
+  # GROWTH PHASE (Post-MVP)
+  # Execution order: Epic 9 → Epic 10 → Epic 11 → Epic 12 (strictly serial)
+  # =========================================================================
+
+  # Epic 9: Submission Safety (G1 idempotency + G2 transactional enqueue)
+  # Sequence: 9.1 (idempotency) → 9.2 (txn enqueue) → 9.3 (E2E + benchmarks)
+  epic-9: done
+  9-1-idempotency-key-schema-and-submission: done
+  9-2-transactional-enqueue: done
+  9-3-submission-safety-e2e-tests-and-benchmarks: done
+  epic-9-retrospective: done
+
+  # Epic 10: Compliance Evidence (G4 OTel traces + G5 audit log)
+  # Sequence: 10.1 (traces) → 10.2 (audit log, needs trace_id) → 10.3 (E2E tests)
+  epic-10: done
+  10-1-otel-distributed-traces: done
+  10-2-append-only-audit-log: done
+  10-3-compliance-e2e-tests: done
+  epic-10-retrospective: done
+
+  # Epic 11: Checkpoint & Durability (G6 checkpoint + G3 UNLOGGED)
+  # Sequence: 11.1 (checkpoint) → 11.2 (UNLOGGED) → 11.3 (E2E + benchmarks)
+  epic-11: done
+  11-1-checkpoint-resume-schema-and-api: done
+  11-2-unlogged-table-mode: done
+  11-3-checkpoint-e2e-tests-and-benchmarks: done
+  epic-11-retrospective: done
+
+  # Epic 12: Workflow Control & Data Residency (G7 HITL + G8 geographic pinning)
+  # Sequence: 12.0 (TaskStatus spike) → 12.1 (HITL) → 12.2 (geo pinning) → 12.3 (E2E tests)
+  epic-12: done
+  12-0-taskstatus-expansion-spike: done
+  12-1-hitl-suspend-resume: done
+  12-2-geographic-worker-pinning: done
+  12-3-workflow-control-and-residency-e2e-tests: done
+  epic-12-retrospective: done

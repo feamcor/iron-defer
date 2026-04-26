@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tasks\n            SET status = 'failed',\n                last_error = 'suspend timeout exceeded',\n                updated_at = now()\n            WHERE status = 'suspended'\n              AND COALESCE(suspended_at, updated_at) < now() - make_interval(secs => $1)\n            RETURNING id, queue, trace_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "queue",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "trace_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "fe790ff47560cac1eb59ee723a6077c04ed230e44eba9b214df99aa2a68f8e8f"
+}

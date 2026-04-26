@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tasks\n            SET idempotency_key = NULL,\n                idempotency_expires_at = NULL,\n                updated_at = now()\n            WHERE idempotency_expires_at < $1\n              AND status IN ('completed', 'failed', 'cancelled')\n              AND idempotency_key IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f042128093ac8951cd4d5100d8b86b0d21cc480e097c2f3bfd435aa193d4a295"
+}

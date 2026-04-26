@@ -1,0 +1,80 @@
+[workspace]
+members = [
+    "crates/domain",
+    "crates/application",
+    "crates/infrastructure",
+    "crates/api",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/feamcor/iron-defer"
+
+[workspace.dependencies]
+# Internal crates
+iron-defer-domain = { path = "crates/domain" }
+iron-defer-application = { path = "crates/application" }
+iron-defer-infrastructure = { path = "crates/infrastructure" }
+
+# Builder derive
+bon = "3"
+
+# Domain
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde = { version = "1", features = ["derive", "rc"] }
+serde_json = "1"
+
+# Infrastructure
+sqlx = { version = "0.8", features = [
+    "runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "migrate"
+] }
+tokio = { version = "1" }
+axum = { version = "0.8" }
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+opentelemetry = "0.27"
+opentelemetry_sdk = { version = "0.27", features = ["metrics", "trace", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.27", features = ["metrics", "trace", "http-proto", "reqwest-client"] }
+opentelemetry-prometheus = "0.27"
+prometheus = "0.13"
+
+# Config
+figment = { version = "0.10", features = ["toml", "env"] }
+dotenvy = "0.15"
+clap = { version = "4", features = ["derive", "env"] }
+
+# Errors
+color-eyre = "0.6"
+
+# Async traits (until async fn in traits fully stable across all use cases)
+async-trait = "0.1"
+
+# Utilities
+tokio-util = { version = "0.7", features = ["rt"] }
+humantime-serde = "1"
+rand = "0.9"
+
+# OpenAPI
+utoipa = { version = "5", features = ["chrono", "uuid"] }
+
+# tokio-console (dev diagnostics)
+console-subscriber = "0.4"
+
+# Benchmarks
+criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+
+# Dev
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }
+mockall = "0.13"
+tracing-test = "0.2"
+assert_cmd = "2"
+regex = "1"
+serial_test = "3"

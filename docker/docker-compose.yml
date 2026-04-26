@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: iron_defer
+      POSTGRES_PASSWORD: iron_defer
+      POSTGRES_DB: iron_defer
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iron_defer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  iron-defer:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      IRON_DEFER__DATABASE__URL: postgres://iron_defer:iron_defer@postgres:5432/iron_defer
+      DATABASE_URL: postgres://iron_defer:iron_defer@postgres:5432/iron_defer
+      IRON_DEFER__SERVER__PORT: "8080"
+      IRON_DEFER__WORKER__CONCURRENCY: "4"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tasks\n            SET status = 'pending',\n                claimed_by = NULL,\n                claimed_until = NULL,\n                scheduled_at = now(),\n                updated_at = now(),\n                attempts = attempts + 1\n            WHERE claimed_by = $1\n              AND status = 'running'\n            RETURNING id, trace_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "trace_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "80d444add0cfc46e5790e304bcbd792401e43d8e5062138948870ada848a9610"
+}

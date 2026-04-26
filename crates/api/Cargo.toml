@@ -1,0 +1,100 @@
+[package]
+name = "iron-defer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "iron_defer"
+path = "src/lib.rs"
+
+[[bin]]
+name = "iron-defer"
+path = "src/main.rs"
+
+[[bench]]
+name = "throughput"
+harness = false
+
+[[bench]]
+name = "submission_safety"
+harness = false
+
+[[bench]]
+name = "audit_overhead"
+harness = false
+
+[[bench]]
+name = "unlogged_throughput"
+harness = false
+
+[[bench]]
+name = "checkpoint_latency"
+harness = false
+
+[[bench]]
+name = "region_throughput"
+harness = false
+
+[[example]]
+name = "basic_enqueue"
+
+[[example]]
+name = "axum_integration"
+
+[[example]]
+name = "retry_and_backoff"
+
+[[example]]
+name = "multi_queue"
+
+[features]
+default = []
+tokio_console = ["iron-defer-infrastructure/tokio_console"]
+
+[dependencies]
+iron-defer-domain = { workspace = true }
+iron-defer-application = { workspace = true }
+# Story 3.1 second-pass review (P17 / D3-a): enable `bin-init` so
+# `main.rs` can call `iron_defer_infrastructure::init_tracing`. The
+# `iron-defer` library surface (this crate's `lib.rs`) does NOT
+# re-export `init_tracing`, so embedders using `iron_defer::...`
+# cannot reach it. An embedder depending directly on
+# `iron-defer-infrastructure` must opt in to this feature themselves,
+# which makes the architectural contract explicit at the Cargo.toml
+# level (Architecture §Enforcement Guidelines).
+iron-defer-infrastructure = { workspace = true, features = ["bin-init"] }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true }
+axum = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+prometheus = { workspace = true }
+opentelemetry = { workspace = true }
+figment = { workspace = true }
+dotenvy = { workspace = true }
+clap = { workspace = true }
+color-eyre = { workspace = true }
+utoipa = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+regex = { workspace = true }
+criterion = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+opentelemetry-prometheus = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true }
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing-test = { workspace = true, features = ["no-env-filter"] }
+uuid = { workspace = true }
+serial_test = { workspace = true }

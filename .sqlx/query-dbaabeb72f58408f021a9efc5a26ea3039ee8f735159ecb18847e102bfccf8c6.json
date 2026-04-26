@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE tasks\n            SET status = 'failed',\n                last_error = 'lease expired: max attempts exhausted',\n                updated_at = now()\n            WHERE status = 'running'\n              AND claimed_until < now()\n              AND attempts >= max_attempts\n            RETURNING id, queue, kind, trace_id, region\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "queue",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "trace_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "region",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "dbaabeb72f58408f021a9efc5a26ea3039ee8f735159ecb18847e102bfccf8c6"
+}

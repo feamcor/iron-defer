@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iron-defer
+  labels:
+    app: iron-defer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iron-defer
+  template:
+    metadata:
+      labels:
+        app: iron-defer
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: iron-defer
+          image: iron-defer:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: iron-defer-config
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          # resources:
+          #   requests:
+          #     cpu: 100m
+          #     memory: 128Mi
+          #   limits:
+          #     cpu: 500m
+          #     memory: 256Mi

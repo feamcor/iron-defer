@@ -1,0 +1,99 @@
+# cargo-deny configuration for iron-defer.
+#
+# Architecture rule (architecture.md line 239): rustls only — no OpenSSL
+# in production code paths.
+#
+# What is banned and why:
+# - `openssl`, `openssl-sys`, `openssl-src` — the OpenSSL bindings + the
+#   vendored OpenSSL build. None of these may appear in any resolved graph.
+# - `native-tls` — the cross-platform TLS abstraction that wraps OpenSSL/
+#   SChannel/Security.framework depending on target. Banned because it is
+#   the standard escape hatch from rustls when a transitive dep enables a
+#   `native-tls` feature flag.
+#
+# What is intentionally NOT banned:
+# - `schannel` (Windows native TLS API binding) and `security-framework`
+#   (macOS Security.framework binding) are NOT competing TLS implementations
+#   in our context — they are platform helpers used by `rustls-native-certs`
+#   to LOAD ROOT CERTIFICATES into a rustls cert store. They appear in our
+#   build only as dev-dependencies via testcontainers' bollard Docker
+#   client, and they do not perform any TLS handshakes themselves. Banning
+#   them by name would force a workaround in dev tooling without improving
+#   the production security posture.
+# - The 1A.1 review patch added these bans defensively, but Story 1A.2's
+#   actual integration with sqlx + testcontainers showed the false-positive
+#   cost. Decision recorded in 1A.2 review (2026-04-06): scope the ban list
+#   to actual TLS implementations, not cert-store loaders.
+#
+# Story 1A.2 enforcement notes:
+# - As of 1A.2, sqlx/tokio/etc. are now in the resolved graph, so the bans
+#   below actually fire on production deps (instead of passing trivially as
+#   they did at the end of 1A.1). The `[[bans.features]]` block additionally
+#   locks down sqlx's native-tls feature flag against transitive feature
+#   unification.
+# - Licenses and advisories configured in Story 5.2 (production readiness).
+
+[licenses]
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+# ring uses a custom ISC-style license that cargo-deny may not map to a
+# standard SPDX id. Exempt it explicitly.
+[[licenses.clarify]]
+name = "ring"
+expression = "ISC AND MIT AND OpenSSL"
+license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[advisories]
+vulnerability = "deny"
+unmaintained = "warn"
+# protobuf 2.28.0: transitive dep via prometheus 0.13.x which has no newer
+# release using protobuf 3.x. We do not parse untrusted protobuf input via
+# this path — it's only used for Prometheus metric encoding.
+# tokio-tar 0.3.1: dev-only dep via testcontainers. No safe upgrade available.
+# The crate is archived. We only use it in dev/test containers.
+# rustls-pemfile 2.2.0: dev-only dep via testcontainers/bollard. Archived,
+# users should migrate to rustls-pki-types PemObject API.
+ignore = [
+    "RUSTSEC-2024-0437",
+    "RUSTSEC-2025-0111",
+    "RUSTSEC-2025-0134",
+]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+# Banned crates. None of these may appear in any resolved graph
+# (production OR dev).
+deny = [
+    { name = "openssl" },
+    { name = "openssl-sys" },
+    { name = "openssl-src" },
+    { name = "native-tls" },
+]
+
+# Lock down sqlx's TLS feature flags against transitive feature unification.
+# Even though we explicitly select `runtime-tokio-rustls`, cargo unifies
+# features across the graph — a downstream dep enabling `runtime-tokio-native-tls`
+# on `sqlx` would silently flip our build to OpenSSL. Deny those feature
+# combinations explicitly.
+[[bans.features]]
+name = "sqlx"
+deny = [
+    "runtime-tokio-native-tls",
+    "runtime-async-std-native-tls",
+    "tls-native-tls",
+]

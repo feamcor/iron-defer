@@ -1,0 +1,55 @@
+[package]
+name = "iron-defer-infrastructure"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "iron_defer_infrastructure"
+path = "src/lib.rs"
+
+# Story 3.1 second-pass review (P17 / D3-a): `init_tracing` installs a
+# GLOBAL tracing subscriber and is only valid for the standalone binary
+# (`crates/api/src/main.rs`). Architecture §Enforcement Guidelines forbids embedded
+# library callers from installing a global subscriber (the caller owns
+# theirs). Feature-gating the re-export behind `bin-init` makes this
+# contract explicit: the `iron-defer` library crate does NOT enable
+# this feature on its public dep edge, so embedders reaching through
+# `iron_defer::...` cannot see it. The `crates/api/Cargo.toml` opt-in
+# grants access to `main.rs` via `iron_defer_infrastructure::init_tracing`.
+# `build_fmt_layer` and `scrub_url` stay un-gated — embedders composing
+# their own subscriber legitimately need the shared layer definition.
+[features]
+default = []
+bin-init = []
+tokio_console = ["dep:console-subscriber"]
+
+[dependencies]
+iron-defer-domain = { workspace = true }
+iron-defer-application = { workspace = true }
+console-subscriber = { workspace = true, optional = true }
+
+async-trait = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+opentelemetry-prometheus = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+prometheus = { workspace = true }
+
+[dev-dependencies]
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing-test = { workspace = true, features = ["no-env-filter"] }

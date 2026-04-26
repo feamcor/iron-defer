@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iron-defer-config
+  labels:
+    app: iron-defer
+data:
+  # NOTE: In production, DATABASE_URL should be provided via a Secret, not a ConfigMap.
+  IRON_DEFER__DATABASE__URL: "postgres://REPLACE_USER:REPLACE_PASSWORD@REPLACE_HOST:5432/iron_defer"
+  DATABASE_URL: "postgres://REPLACE_USER:REPLACE_PASSWORD@REPLACE_HOST:5432/iron_defer"
+  IRON_DEFER__SERVER__PORT: "8080"
+  IRON_DEFER__WORKER__CONCURRENCY: "4"
+  IRON_DEFER__WORKER__POLL_INTERVAL: "500ms"
+  IRON_DEFER__WORKER__LEASE_DURATION: "5m"
+  IRON_DEFER__WORKER__SWEEPER_INTERVAL: "1m"
+  IRON_DEFER__WORKER__SHUTDOWN_TIMEOUT: "30s"
+  IRON_DEFER__OBSERVABILITY__OTLP_ENDPOINT: ""
