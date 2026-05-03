@@ -154,4 +154,4 @@ See the [Documentation Map](docs/index.md) for the full guide → example → te
 
 ## License
 
-Licensed under MIT OR Apache-2.0.
+Licensed under MIT.
