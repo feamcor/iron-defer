@@ -82,7 +82,7 @@ pub use iron_defer_application::{
 pub use iron_defer_domain::{
     CancelResult, ExecutionErrorKind, ListTasksFilter, ListTasksResult, PayloadErrorKind,
     QueueName, QueueStatistics, Task, TaskContext, TaskError, TaskId, TaskRecord, TaskStatus,
-    WorkerStatus, IDEMPOTENCY_KEY_MAX_LEN,
+    WorkerStatus, IDEMPOTENCY_KEY_MAX_LEN, REGION_MAX_LEN,
 };
 pub use iron_defer_infrastructure::create_metrics;
 pub use tokio_util::sync::CancellationToken;
@@ -1134,11 +1134,11 @@ fn validate_region(region: &str) -> Result<(), TaskError> {
             },
         });
     }
-    if region.len() > 63 {
+    if region.len() > REGION_MAX_LEN {
         return Err(TaskError::InvalidPayload {
             kind: PayloadErrorKind::Validation {
                 message: format!(
-                    "region label length {} exceeds maximum of 63 characters",
+                    "region label length {} exceeds maximum of {REGION_MAX_LEN} characters",
                     region.len()
                 ),
             },
@@ -1731,5 +1731,45 @@ mod tests {
             }
             other => panic!("expected InvalidPayload::Validation, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn validate_region_accepts_valid() {
+        assert!(validate_region("us-east-1").is_ok());
+        assert!(validate_region("a").is_ok());
+        assert!(validate_region("1").is_ok());
+        assert!(validate_region("a-b-c").is_ok());
+        assert!(validate_region(&"a".repeat(REGION_MAX_LEN)).is_ok());
+    }
+
+    #[test]
+    fn validate_region_rejects_empty() {
+        let err = validate_region("").unwrap_err();
+        assert!(matches!(
+            err,
+            TaskError::InvalidPayload {
+                kind: PayloadErrorKind::Validation { ref message }
+            } if message.contains("must not be empty")
+        ));
+    }
+
+    #[test]
+    fn validate_region_rejects_too_long() {
+        let long_region = "a".repeat(REGION_MAX_LEN + 1);
+        let err = validate_region(&long_region).unwrap_err();
+        assert!(matches!(
+            err,
+            TaskError::InvalidPayload {
+                kind: PayloadErrorKind::Validation { ref message }
+            } if message.contains("exceeds maximum of")
+        ));
+    }
+
+    #[test]
+    fn validate_region_rejects_invalid_chars() {
+        assert!(validate_region("US-EAST-1").is_err()); // Uppercase
+        assert!(validate_region("us_east_1").is_err()); // Underscore
+        assert!(validate_region("us east").is_err()); // Space
+        assert!(validate_region("us!east").is_err()); // Special char
     }
 }

@@ -238,6 +238,13 @@ impl TaskRecord {
                 key.len()
             );
         }
+        if let Some(ref region) = self.region {
+            debug_assert!(
+                region.len() <= REGION_MAX_LEN,
+                "region length {} exceeds maximum of {REGION_MAX_LEN}",
+                region.len()
+            );
+        }
     }
 
     #[must_use]
@@ -331,6 +338,7 @@ pub trait CheckpointWriter: Send + Sync {
 
 const CHECKPOINT_MAX_BYTES: usize = 1_048_576;
 pub const SIGNAL_PAYLOAD_MAX_BYTES: usize = 1_048_576; // 1 MiB
+pub const REGION_MAX_LEN: usize = 63;
 pub const IDEMPOTENCY_KEY_MAX_LEN: usize = 250;
 
 #[derive(Clone)]
@@ -598,6 +606,31 @@ mod tests {
         assert!(
             result.is_err(),
             "expected debug_assert to fire for claimed_by without claimed_until"
+        );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn validate_invariants_panics_on_too_long_region() {
+        let now = chrono::Utc::now();
+        let record = TaskRecord::builder()
+            .id(TaskId::new())
+            .queue(QueueName::try_from("test").unwrap())
+            .kind(TaskKind::try_from("test").unwrap())
+            .payload(Arc::new(serde_json::json!({})))
+            .status(TaskStatus::Pending)
+            .priority(crate::model::priority::Priority::new(0))
+            .attempts(crate::model::attempts::AttemptCount::ZERO)
+            .max_attempts(crate::model::attempts::MaxAttempts::DEFAULT)
+            .scheduled_at(now)
+            .created_at(now)
+            .updated_at(now)
+            .region("a".repeat(REGION_MAX_LEN + 1))
+            .build();
+        let result = std::panic::catch_unwind(|| record.validate_invariants());
+        assert!(
+            result.is_err(),
+            "expected debug_assert to fire for region length > REGION_MAX_LEN"
         );
     }
 
