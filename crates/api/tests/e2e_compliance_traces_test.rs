@@ -3,9 +3,7 @@ mod common;
 use std::sync::Arc;
 use std::time::Duration;
 
-use iron_defer::{
-    DatabaseConfig, ExecutionErrorKind, IronDefer, Task, TaskContext, TaskError, WorkerConfig,
-};
+use iron_defer::{IronDefer, Task, WorkerConfig};
 use opentelemetry::global;
 use opentelemetry::trace::TraceId;
 use opentelemetry_sdk::testing::trace::InMemorySpanExporter;

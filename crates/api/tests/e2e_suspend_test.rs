@@ -10,7 +10,7 @@ use std::time::Duration;
 #[tokio::test]
 async fn e2e_suspend_signal_resume_round_trip() {
     let queue = common::unique_queue();
-    let Some((ts, pool)) = boot_e2e_engine_with_suspend(&queue, Duration::from_secs(60), Duration::from_secs(60), false).await else {
+    let Some((ts, _pool)) = boot_e2e_engine_with_suspend(&queue, Duration::from_secs(60), Duration::from_secs(60), false).await else {
         eprintln!("[skip] Docker unavailable");
         return;
     };
@@ -160,7 +160,7 @@ async fn e2e_suspended_not_blocking_concurrency() {
         eprintln!("[skip] Docker unavailable");
         return;
     };
-    let db_url = common::test_db_url().await.unwrap().to_owned();
+    let _db_url = common::test_db_url().await.unwrap().to_owned();
 
     let worker_config = iron_defer::WorkerConfig {
         concurrency: 1,

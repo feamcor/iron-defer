@@ -3,7 +3,7 @@ mod common;
 use std::sync::Arc;
 use std::time::Duration;
 
-use iron_defer::{DatabaseConfig, IronDefer, Task, TaskContext, TaskError, WorkerConfig};
+use iron_defer::{DatabaseConfig, IronDefer, WorkerConfig};
 use serial_test::serial;
 use sqlx::PgPool;
 
