@@ -148,7 +148,7 @@ pub struct IronDefer {
     producer_config: iron_defer_application::ProducerConfig,
     queue: QueueName,
     /// `OTel` metric instrument handles for the worker and sweeper.
-    metrics: Option<iron_defer_application::Metrics>,
+    metrics: Option<Metrics>,
     /// Prometheus registry for the `/metrics` scrape endpoint (FR18).
     /// `None` when metrics are not configured (embedded mode without `OTel`).
     pub(crate) prometheus_registry: Option<prometheus::Registry>,
@@ -170,7 +170,7 @@ impl IronDefer {
                     .any(|allowed| allowed == r)
             {
                 return Err(TaskError::InvalidPayload {
-                    kind: iron_defer_domain::PayloadErrorKind::Validation {
+                    kind: PayloadErrorKind::Validation {
                         message: format!(
                             "unauthorized region '{r}'; allowed regions: {:?}",
                             self.producer_config.allowed_regions
@@ -671,10 +671,10 @@ impl IronDefer {
     ///
     /// Returns `TaskError::Storage` if the database operation fails.
     #[instrument(skip(self), fields(task_id = %id), err)]
-    pub async fn cancel(&self, id: TaskId) -> Result<iron_defer_domain::CancelResult, TaskError> {
+    pub async fn cancel(&self, id: TaskId) -> Result<CancelResult, TaskError> {
         let result = self.scheduler.cancel(id).await?;
 
-        if let iron_defer_domain::CancelResult::Cancelled(ref record) = result {
+        if let CancelResult::Cancelled(ref record) = result {
             tracing::info!(
                 event = "task_cancelled",
                 task_id = %record.id(),
@@ -817,7 +817,7 @@ impl IronDefer {
             sweeper_token,
         )
         .with_suspend_timeout(self.worker_config.suspend_timeout)
-        .with_saturation_classifier(std::sync::Arc::new(
+        .with_saturation_classifier(Arc::new(
             iron_defer_infrastructure::is_pool_timeout,
         ));
         if let Some(ref m) = self.metrics {
@@ -831,8 +831,8 @@ impl IronDefer {
         });
 
         let worker_id = iron_defer_domain::WorkerId::new();
-        let checkpoint_writer: std::sync::Arc<dyn iron_defer_domain::CheckpointWriter> =
-            std::sync::Arc::new(iron_defer_infrastructure::PostgresCheckpointWriter::new(
+        let checkpoint_writer: Arc<dyn iron_defer_domain::CheckpointWriter> =
+            Arc::new(iron_defer_infrastructure::PostgresCheckpointWriter::new(
                 self.pool.clone(),
             ));
         let worker = WorkerService::builder()
@@ -842,7 +842,7 @@ impl IronDefer {
             .queue(self.queue.clone())
             .token(worker_token)
             .worker_id(worker_id)
-            .is_saturation(std::sync::Arc::new(
+            .is_saturation(Arc::new(
                 iron_defer_infrastructure::is_pool_timeout,
             ))
             .maybe_metrics(self.metrics.clone())
@@ -959,7 +959,7 @@ impl IronDefer {
                     source: Box::new(e),
                 })?;
 
-        let router = crate::http::router::build(Arc::clone(self));
+        let router = http::router::build(Arc::clone(self));
 
         axum::serve(listener, router)
             .with_graceful_shutdown(token.cancelled_owned())
@@ -1273,7 +1273,7 @@ pub struct IronDeferBuilder {
     producer_cfg: iron_defer_application::ProducerConfig,
     database_config: DatabaseConfig,
     queue: Option<String>,
-    metrics: Option<iron_defer_application::Metrics>,
+    metrics: Option<Metrics>,
     prometheus_registry: Option<prometheus::Registry>,
     readiness_timeout: std::time::Duration,
 }
@@ -1377,10 +1377,10 @@ impl IronDeferBuilder {
 
     /// Provide `OTel` metric instrument handles for the worker and sweeper.
     ///
-    /// Embedded callers create a [`Metrics`](iron_defer_application::Metrics)
-    /// from their own `Meter` via [`create_metrics`](iron_defer_infrastructure::create_metrics).
+    /// Embedded callers create a [`Metrics`](Metrics)
+    /// from their own `Meter` via [`create_metrics`](create_metrics).
     #[must_use]
-    pub fn metrics(mut self, metrics: iron_defer_application::Metrics) -> Self {
+    pub fn metrics(mut self, metrics: Metrics) -> Self {
         self.metrics = Some(metrics);
         self
     }
@@ -1705,7 +1705,7 @@ mod tests {
 
     #[test]
     fn validate_scheduled_at_accepts_epoch() {
-        let dt = chrono::DateTime::UNIX_EPOCH;
+        let dt = DateTime::UNIX_EPOCH;
         assert!(validate_scheduled_at(&dt).is_ok());
     }
 
