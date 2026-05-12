@@ -21,7 +21,7 @@ pub use crate::metrics::{
     TASKS_PENDING, TASKS_RUNNING, TASKS_SUSPENDED_TOTAL, TASK_ATTEMPTS_TOTAL, TASK_DURATION_SECONDS,
     TASK_FAILURES_TOTAL, WORKER_POOL_UTILIZATION, ZOMBIE_RECOVERIES_TOTAL,
 };
-pub use crate::observability::emit_otel_state_transition;
+pub use crate::observability::StateTransitionEvent;
 pub use crate::ports::{RecoveryOutcome, TaskExecutor, TaskRepository, TransactionalTaskRepository};
 pub use crate::registry::{TaskHandler, TaskRegistry};
 pub use crate::services::{SchedulerService, SweeperService, WorkerService, drain_join_set};

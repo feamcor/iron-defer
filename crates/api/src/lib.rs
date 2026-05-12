@@ -899,16 +899,17 @@ impl IronDefer {
                         "released leases for timed-out in-flight tasks"
                     );
                     for (id, trace_id) in released {
-                        iron_defer_application::emit_otel_state_transition(
-                            trace_id.as_deref(),
-                            id,
-                            "running",
-                            "pending",
-                            "unknown", // queue/kind unknown at this site
-                            "unknown",
-                            Some(worker_id),
-                            0, // attempts unknown
-                        );
+                        // queue/kind/attempts are unknown at this site
+                        iron_defer_application::StateTransitionEvent::builder()
+                            .task_id(id)
+                            .from_status("running")
+                            .to_status("pending")
+                            .queue("unknown")
+                            .kind("unknown")
+                            .maybe_trace_id_hex(trace_id)
+                            .worker_id(worker_id)
+                            .build()
+                            .emit();
                     }
                 }
                 Err(e) => {
