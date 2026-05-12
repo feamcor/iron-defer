@@ -82,7 +82,7 @@ pub use iron_defer_application::{
 pub use iron_defer_domain::{
     CancelResult, ExecutionErrorKind, ListTasksFilter, ListTasksResult, PayloadErrorKind,
     QueueName, QueueStatistics, Task, TaskContext, TaskError, TaskId, TaskRecord, TaskStatus,
-    WorkerStatus,
+    WorkerStatus, IDEMPOTENCY_KEY_MAX_LEN,
 };
 pub use iron_defer_infrastructure::create_metrics;
 pub use tokio_util::sync::CancellationToken;
@@ -387,23 +387,7 @@ impl IronDefer {
         task: T,
         idempotency_key: &str,
     ) -> Result<(TaskRecord, bool), TaskError> {
-        if idempotency_key.is_empty() {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "idempotency key must not be empty".to_owned(),
-                },
-            });
-        }
-        if idempotency_key.len() > 250 {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!(
-                        "idempotency key length {} exceeds maximum of 250 characters",
-                        idempotency_key.len()
-                    ),
-                },
-            });
-        }
+        validate_idempotency_key(idempotency_key)?;
         if self.registry.get(T::KIND).is_none() {
             return Err(TaskError::InvalidPayload {
                 kind: PayloadErrorKind::Validation {
@@ -455,23 +439,7 @@ impl IronDefer {
         region: &str,
     ) -> Result<(TaskRecord, bool), TaskError> {
         validate_region(region)?;
-        if idempotency_key.is_empty() {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "idempotency key must not be empty".to_owned(),
-                },
-            });
-        }
-        if idempotency_key.len() > 250 {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!(
-                        "idempotency key length {} exceeds maximum of 250 characters",
-                        idempotency_key.len()
-                    ),
-                },
-            });
-        }
+        validate_idempotency_key(idempotency_key)?;
         if self.registry.get(T::KIND).is_none() {
             return Err(TaskError::InvalidPayload {
                 kind: PayloadErrorKind::Validation {
@@ -582,23 +550,7 @@ impl IronDefer {
         idempotency_key: &str,
         region: Option<&str>,
     ) -> Result<(TaskRecord, bool), TaskError> {
-        if idempotency_key.is_empty() {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "idempotency key must not be empty".to_owned(),
-                },
-            });
-        }
-        if idempotency_key.len() > 250 {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!(
-                        "idempotency key length {} exceeds maximum of 250 characters",
-                        idempotency_key.len()
-                    ),
-                },
-            });
-        }
+        validate_idempotency_key(idempotency_key)?;
         if let Some(r) = region {
             if r.is_empty() {
                 return Err(TaskError::InvalidPayload {
@@ -1114,23 +1066,7 @@ impl IronDefer {
         region: Option<&str>,
     ) -> Result<(TaskRecord, bool), TaskError> {
         self.validate_region_authorization(region)?;
-        if idempotency_key.is_empty() {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "idempotency key must not be empty".to_owned(),
-                },
-            });
-        }
-        if idempotency_key.len() > 250 {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!(
-                        "idempotency key length {} exceeds maximum of 250 characters",
-                        idempotency_key.len()
-                    ),
-                },
-            });
-        }
+        validate_idempotency_key(idempotency_key)?;
         if kind.is_empty() {
             return Err(TaskError::InvalidPayload {
                 kind: PayloadErrorKind::Validation {
@@ -1216,6 +1152,27 @@ fn validate_region(region: &str) -> Result<(), TaskError> {
             kind: PayloadErrorKind::Validation {
                 message: format!(
                     "region label '{region}' must contain only lowercase ASCII letters, digits, and hyphens"
+                ),
+            },
+        });
+    }
+    Ok(())
+}
+
+fn validate_idempotency_key(idempotency_key: &str) -> Result<(), TaskError> {
+    if idempotency_key.is_empty() {
+        return Err(TaskError::InvalidPayload {
+            kind: PayloadErrorKind::Validation {
+                message: "idempotency key must not be empty".to_owned(),
+            },
+        });
+    }
+    if idempotency_key.len() > IDEMPOTENCY_KEY_MAX_LEN {
+        return Err(TaskError::InvalidPayload {
+            kind: PayloadErrorKind::Validation {
+                message: format!(
+                    "idempotency key length {} exceeds maximum of {IDEMPOTENCY_KEY_MAX_LEN} characters",
+                    idempotency_key.len()
                 ),
             },
         });

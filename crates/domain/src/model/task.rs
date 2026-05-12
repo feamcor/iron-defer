@@ -231,6 +231,13 @@ impl TaskRecord {
             self.claimed_by.is_some() == self.claimed_until.is_some(),
             "claimed_by and claimed_until must be set/unset together"
         );
+        if let Some(ref key) = self.idempotency_key {
+            debug_assert!(
+                key.len() <= IDEMPOTENCY_KEY_MAX_LEN,
+                "idempotency key length {} exceeds maximum of {IDEMPOTENCY_KEY_MAX_LEN}",
+                key.len()
+            );
+        }
     }
 
     #[must_use]
@@ -324,6 +331,7 @@ pub trait CheckpointWriter: Send + Sync {
 
 const CHECKPOINT_MAX_BYTES: usize = 1_048_576;
 pub const SIGNAL_PAYLOAD_MAX_BYTES: usize = 1_048_576; // 1 MiB
+pub const IDEMPOTENCY_KEY_MAX_LEN: usize = 250;
 
 #[derive(Clone)]
 #[non_exhaustive]

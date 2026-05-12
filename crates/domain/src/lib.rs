@@ -15,5 +15,6 @@ pub use crate::error::{
 pub use crate::model::{
     AttemptCount, AuditLogEntry, CancelResult, CheckpointWriter, ListAuditLogResult, ListTasksFilter,
     ListTasksResult, MaxAttempts, Priority, QueueName, QueueStatistics, Task, TaskContext, TaskId,
-    TaskKind, TaskRecord, TaskStatus, WorkerId, WorkerStatus, SIGNAL_PAYLOAD_MAX_BYTES,
+    TaskKind, TaskRecord, TaskStatus, WorkerId, WorkerStatus, IDEMPOTENCY_KEY_MAX_LEN,
+    SIGNAL_PAYLOAD_MAX_BYTES,
 };
