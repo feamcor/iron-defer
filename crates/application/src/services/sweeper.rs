@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::metrics::Metrics;
-use iron_defer_domain::{QueueName, TaskError, TaskId};
+use iron_defer_domain::{QueueName, TaskError, TaskId, TaskStatus};
 use opentelemetry::KeyValue;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
@@ -107,10 +107,10 @@ impl SweeperService {
                     // (sweeper recovery — no specific worker; attempts unknown)
                     crate::StateTransitionEvent::builder()
                         .task_id(*id)
-                        .from_status("running")
-                        .to_status("pending")
-                        .queue(queue.as_str())
-                        .kind(kind.as_str())
+                        .from_status(TaskStatus::Running)
+                        .to_status(TaskStatus::Pending)
+                        .queue(queue.clone())
+                        .kind(kind.clone())
                         .maybe_trace_id_hex(trace_id.clone())
                         .build()
                         .emit();
@@ -126,10 +126,10 @@ impl SweeperService {
                     // Emit transition event for zombie exhaustion
                     crate::StateTransitionEvent::builder()
                         .task_id(*id)
-                        .from_status("running")
-                        .to_status("failed")
-                        .queue(queue.as_str())
-                        .kind(kind.as_str())
+                        .from_status(TaskStatus::Running)
+                        .to_status(TaskStatus::Failed)
+                        .queue(queue.clone())
+                        .kind(kind.clone())
                         .maybe_trace_id_hex(trace_id.clone())
                         .build()
                         .emit();
@@ -270,10 +270,9 @@ impl SweeperService {
                                 );
                                 crate::StateTransitionEvent::builder()
                                     .task_id(*id)
-                                    .from_status("suspended")
-                                    .to_status("failed")
-                                    .queue(queue.as_str())
-                                    .kind("unknown")
+                                    .from_status(TaskStatus::Suspended)
+                                    .to_status(TaskStatus::Failed)
+                                    .queue(queue.clone())
                                     .build()
                                     .emit();
                                 if let Some(ref m) = self.metrics {

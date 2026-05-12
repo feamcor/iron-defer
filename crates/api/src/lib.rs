@@ -902,10 +902,8 @@ impl IronDefer {
                         // queue/kind/attempts are unknown at this site
                         iron_defer_application::StateTransitionEvent::builder()
                             .task_id(id)
-                            .from_status("running")
-                            .to_status("pending")
-                            .queue("unknown")
-                            .kind("unknown")
+                            .from_status(iron_defer_domain::TaskStatus::Running)
+                            .to_status(iron_defer_domain::TaskStatus::Pending)
                             .maybe_trace_id_hex(trace_id)
                             .worker_id(worker_id)
                             .build()
