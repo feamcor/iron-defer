@@ -2,32 +2,37 @@ use std::sync::Arc;
 use std::time::Duration;
 use criterion::{Criterion, criterion_group, criterion_main, BenchmarkId};
 use iron_defer::IronDefer;
+use iron_defer_application::TaskRepository;
 use iron_defer_domain::{QueueName, WorkerId};
+use iron_defer_infrastructure::PostgresTaskRepository;
 use tokio::runtime::Runtime;
 
 #[path = "../tests/common/mod.rs"]
 mod common;
 
-async fn setup_engine(queue: &str) -> IronDefer {
+async fn setup_engine(queue: &str) -> (IronDefer, PostgresTaskRepository) {
     let pool = common::fresh_pool_on_shared_container()
         .await
         .expect("pool");
-    
-    IronDefer::builder()
-        .pool(pool)
+
+    let engine = IronDefer::builder()
+        .pool(pool.clone())
         .queue(queue)
         .skip_migrations(false)
         .build()
         .await
-        .expect("engine")
+        .expect("engine");
+    let repo = PostgresTaskRepository::new(pool, false);
+    (engine, repo)
 }
 
 fn bench_throughput(c: &mut Criterion) {
     let rt = Runtime::new().expect("runtime");
     let queue_str = "bench-throughput";
     let qn = QueueName::try_from(queue_str).unwrap();
-    let engine = rt.block_on(setup_engine(queue_str));
+    let (engine, repo) = rt.block_on(setup_engine(queue_str));
     let engine = Arc::new(engine);
+    let repo = Arc::new(repo);
 
     let mut group = c.benchmark_group("geographic_pinning_throughput");
     let batch_size = 100;
@@ -46,10 +51,10 @@ fn bench_throughput(c: &mut Criterion) {
             let mut claimed = 0;
             while claimed < n {
                 for worker_id in &workers {
-                    if engine.claim_next(&qn, *worker_id, Duration::from_secs(30), None)
+                    if repo.claim_next(&qn, *worker_id, Duration::from_secs(30), None)
                         .await
                         .expect("claim")
-                        .is_some() 
+                        .is_some()
                     {
                         claimed += 1;
                     }
@@ -77,10 +82,10 @@ fn bench_throughput(c: &mut Criterion) {
                 for i in 0..4 {
                     let region = regions[i];
                     let worker_id = worker_ids[i];
-                    if engine.claim_next(&qn, worker_id, Duration::from_secs(30), Some(region))
+                    if repo.claim_next(&qn, worker_id, Duration::from_secs(30), Some(region))
                         .await
                         .expect("claim")
-                        .is_some() 
+                        .is_some()
                     {
                         claimed += 1;
                     }
