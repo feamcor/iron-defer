@@ -338,7 +338,25 @@ pub trait CheckpointWriter: Send + Sync {
 
 const CHECKPOINT_MAX_BYTES: usize = 1_048_576;
 pub const SIGNAL_PAYLOAD_MAX_BYTES: usize = 1_048_576; // 1 MiB
+/// Maximum region label length in bytes. Chosen as 63 to align with the
+/// DNS-1123 label convention used by Kubernetes label values, RFC 1035 DNS
+/// labels, and Postgres `NAMEDATALEN - 1`. The accompanying character set
+/// (lowercase ASCII letters, digits, hyphen — enforced at the API façade)
+/// matches the same convention, so common cloud region IDs (`us-east-1`,
+/// `eu-west-2`, `ap-south-1`) and Kubernetes zone labels fit naturally.
+/// The cap also bounds the cardinality of the `region` OTel metric label
+/// and tracing field.
 pub const REGION_MAX_LEN: usize = 63;
+
+/// Maximum idempotency key length in bytes. Chosen as 250 to stay well
+/// under Postgres's B-tree key-size limit for the unique partial index
+/// `(queue, idempotency_key)` (migration 0004) while reserving headroom
+/// for `queue` (up to [`QueueName::MAX_LEN`]). Matches Stripe's 255-char
+/// idempotency-key convention with a small safety margin. Typical client
+/// shapes — UUID v4 (36 chars), ULID (26 chars), or short domain IDs —
+/// fit comfortably.
+///
+/// [`QueueName::MAX_LEN`]: crate::QueueName::MAX_LEN
 pub const IDEMPOTENCY_KEY_MAX_LEN: usize = 250;
 
 #[derive(Clone)]
