@@ -67,6 +67,42 @@ mod task_handler_adapter;
 
 use task_handler_adapter::TaskHandlerAdapter;
 
+/// PostgreSQL table persistence mode, mirroring the single-character
+/// `pg_class.relpersistence` system-catalog column. Postgres only defines
+/// three values (`'p'`, `'u'`, `'t'`); any other value is rejected by
+/// [`TablePersistence::try_from`] as a forward-compatibility guard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TablePersistence {
+    /// `'p'` — permanent (WAL-backed). The default for `CREATE TABLE`.
+    Permanent,
+    /// `'u'` — UNLOGGED. Skips WAL; rows are truncated on crash recovery.
+    Unlogged,
+    /// `'t'` — temporary, session-scoped.
+    Temporary,
+}
+
+impl TablePersistence {
+    #[must_use]
+    pub fn is_unlogged(self) -> bool {
+        matches!(self, Self::Unlogged)
+    }
+}
+
+impl TryFrom<&str> for TablePersistence {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        match s {
+            "p" => Ok(Self::Permanent),
+            "u" => Ok(Self::Unlogged),
+            "t" => Ok(Self::Temporary),
+            other => Err(format!(
+                "unknown pg_class.relpersistence value: {other:?}"
+            )),
+        }
+    }
+}
+
 // Public re-exports — the iron-defer library API surface.
 //
 // Forbidden re-exports per Architecture §Architectural Boundaries: any
@@ -1466,7 +1502,12 @@ impl IronDeferBuilder {
             return Ok(());
         };
 
-        let is_unlogged = persistence == "u";
+        let persistence = TablePersistence::try_from(persistence.as_str()).map_err(|msg| {
+            TaskError::Storage {
+                source: msg.into(),
+            }
+        })?;
+        let is_unlogged = persistence.is_unlogged();
 
         if want_unlogged && !is_unlogged {
             tracing::warn!(
@@ -1663,5 +1704,25 @@ mod tests {
         assert!(validate_region("us_east_1").is_err()); // Underscore
         assert!(validate_region("us east").is_err()); // Space
         assert!(validate_region("us!east").is_err()); // Special char
+    }
+
+    #[test]
+    fn table_persistence_try_from_accepts_known_codes() {
+        assert_eq!(TablePersistence::try_from("p"), Ok(TablePersistence::Permanent));
+        assert_eq!(TablePersistence::try_from("u"), Ok(TablePersistence::Unlogged));
+        assert_eq!(TablePersistence::try_from("t"), Ok(TablePersistence::Temporary));
+    }
+
+    #[test]
+    fn table_persistence_try_from_rejects_unknown_code() {
+        let err = TablePersistence::try_from("x").unwrap_err();
+        assert!(err.contains("unknown pg_class.relpersistence value"), "{err}");
+    }
+
+    #[test]
+    fn table_persistence_is_unlogged() {
+        assert!(TablePersistence::Unlogged.is_unlogged());
+        assert!(!TablePersistence::Permanent.is_unlogged());
+        assert!(!TablePersistence::Temporary.is_unlogged());
     }
 }
