@@ -86,6 +86,20 @@ impl TablePersistence {
     pub fn is_unlogged(self) -> bool {
         matches!(self, Self::Unlogged)
     }
+
+    /// SQL keyword for `ALTER TABLE … SET <kw>`. `Temporary` is `None` —
+    /// Postgres does not let a regular table be converted to a temp table.
+    /// Note `Permanent` maps to `LOGGED`: Postgres' SQL grammar names the
+    /// "permanent" state by its WAL-backed property, not by `pg_class`'s
+    /// `'p'` code.
+    #[must_use]
+    pub fn alter_table_keyword(self) -> Option<&'static str> {
+        match self {
+            Self::Permanent => Some("LOGGED"),
+            Self::Unlogged => Some("UNLOGGED"),
+            Self::Temporary => None,
+        }
+    }
 }
 
 impl TryFrom<&str> for TablePersistence {
@@ -1513,10 +1527,10 @@ impl IronDeferBuilder {
             tracing::warn!(
                 "converting tasks table to UNLOGGED — data will be LOST on Postgres crash recovery"
             );
-            Self::set_table_persistence(pool, "UNLOGGED").await?;
+            Self::set_table_persistence(pool, TablePersistence::Unlogged).await?;
         } else if !want_unlogged && is_unlogged {
             tracing::warn!("restoring tasks table to LOGGED (WAL-backed)");
-            Self::set_table_persistence(pool, "LOGGED").await?;
+            Self::set_table_persistence(pool, TablePersistence::Permanent).await?;
         }
 
         if want_unlogged {
@@ -1537,7 +1551,14 @@ impl IronDeferBuilder {
     /// UNLOGGED tables, so when converting to UNLOGGED we drop the FK
     /// (audit_log is disabled via mutual exclusion anyway). When restoring
     /// to LOGGED we re-add the FK so audit log integrity is preserved.
-    async fn set_table_persistence(pool: &PgPool, mode: &str) -> Result<(), TaskError> {
+    async fn set_table_persistence(
+        pool: &PgPool,
+        target: TablePersistence,
+    ) -> Result<(), TaskError> {
+        let keyword = target
+            .alter_table_keyword()
+            .expect("Temporary cannot be set via ALTER TABLE — only Permanent and Unlogged");
+
         let has_audit_table: bool = sqlx::query_scalar(
             "SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'task_audit_log')",
         )
@@ -1575,16 +1596,16 @@ impl IronDeferBuilder {
             })?;
         }
 
-        sqlx::query(&format!("ALTER TABLE tasks SET {mode}"))
+        sqlx::query(&format!("ALTER TABLE tasks SET {keyword}"))
             .execute(pool)
             .await
             .map_err(|e| TaskError::Storage {
-                source: format!("ALTER TABLE tasks SET {mode} failed: {e}").into(),
+                source: format!("ALTER TABLE tasks SET {keyword} failed: {e}").into(),
             })?;
 
-        // Restore FK only when converting back to LOGGED (both tables are
+        // Restore FK only when converting back to permanent (both tables are
         // now permanent, so the FK is valid).
-        if mode == "LOGGED" {
+        if target == TablePersistence::Permanent {
             if let Some(ref name) = fk_name {
                 // Delete orphaned audit rows before restoring the FK. This can
                 // happen after a Postgres crash in UNLOGGED mode.
@@ -1724,5 +1745,12 @@ mod tests {
         assert!(TablePersistence::Unlogged.is_unlogged());
         assert!(!TablePersistence::Permanent.is_unlogged());
         assert!(!TablePersistence::Temporary.is_unlogged());
+    }
+
+    #[test]
+    fn table_persistence_alter_table_keyword() {
+        assert_eq!(TablePersistence::Permanent.alter_table_keyword(), Some("LOGGED"));
+        assert_eq!(TablePersistence::Unlogged.alter_table_keyword(), Some("UNLOGGED"));
+        assert_eq!(TablePersistence::Temporary.alter_table_keyword(), None);
     }
 }
