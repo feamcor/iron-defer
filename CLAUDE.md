@@ -38,8 +38,10 @@ cargo bench -p iron-defer --bench throughput
 ```
 
 Cargo aliases (defined in `.cargo/config.toml`):
-- `cargo check-all` — clippy pedantic across workspace
-- `cargo test-all` — test across workspace
+- `cargo check-all` → `clippy --workspace --all-targets -- -D clippy::pedantic` (stricter than CI's `-D warnings`)
+- `cargo test-all` → `test --workspace`
+
+The full CI quality gate is `fmt --check` + `clippy -D warnings` + `cargo deny check` + `cargo test` + `sqlx prepare --check`. All five must pass before merging.
 
 ### Local Postgres for examples/manual testing
 
@@ -47,6 +49,8 @@ Cargo aliases (defined in `.cargo/config.toml`):
 docker compose -f docker/docker-compose.dev.yml up -d
 DATABASE_URL=postgres://iron_defer:iron_defer@localhost:5432/iron_defer cargo run --example basic_enqueue
 ```
+
+Examples live in `crates/api/examples/`: `basic_enqueue`, `axum_integration`, `retry_and_backoff`, `multi_queue`. Prefer running an example for manual verification over scratch binaries (see "No Scratch Files Left Behind" below).
 
 ### Running the standalone binary
 
@@ -108,6 +112,7 @@ Precedence: defaults < `config.toml` < `config.{profile}.toml` < env vars (`IRON
 - Env vars use `__` (double underscore) as the nesting separator, e.g. `IRON_DEFER__DATABASE__URL`, `IRON_DEFER__WORKER__CONCURRENCY`.
 - Set `IRON_DEFER_PROFILE=<name>` to layer in `config.{name}.toml` on top of `config.toml`.
 - `DATABASE_URL` is also accepted as an alias for `IRON_DEFER__DATABASE__URL`.
+- `database.unlogged_tables = true` switches the tasks table to PostgreSQL `UNLOGGED` for high-throughput non-durable workloads. Data is lost on crash recovery and the option is mutually exclusive with `database.audit_log`.
 
 ## Test Infrastructure
 
@@ -129,3 +134,7 @@ When changing a subsystem, consult the relevant ADR or guideline before making n
 - Edition: 2024
 - MSRV: 1.94
 - Formatter: `rustfmt.toml` sets `edition = "2024"`, `max_width = 100`
+
+## Commit conventions
+
+Imperative mood, present tense (`Add`, `Fix`, `Remove`). One logical change per PR. New behavior must include tests. See `CONTRIBUTING.md` for the full CI gate list.
