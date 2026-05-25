@@ -38,8 +38,10 @@ cargo bench -p iron-defer --bench throughput
 ```
 
 Cargo aliases (defined in `.cargo/config.toml`):
-- `cargo check-all` — clippy pedantic across workspace
-- `cargo test-all` — test across workspace
+- `cargo check-all` → `clippy --workspace --all-targets -- -D clippy::pedantic` (stricter than CI's `-D warnings`)
+- `cargo test-all` → `test --workspace`
+
+The full CI quality gate is `fmt --check` + `clippy -D warnings` + `cargo deny check` + `cargo test` + `sqlx prepare --check`. All five must pass before merging.
 
 ### Local Postgres for examples/manual testing
 
@@ -47,6 +49,17 @@ Cargo aliases (defined in `.cargo/config.toml`):
 docker compose -f docker/docker-compose.dev.yml up -d
 DATABASE_URL=postgres://iron_defer:iron_defer@localhost:5432/iron_defer cargo run --example basic_enqueue
 ```
+
+Examples live in `crates/api/examples/`: `basic_enqueue`, `axum_integration`, `retry_and_backoff`, `multi_queue`. Prefer running an example for manual verification over scratch binaries (see "No Scratch Files Left Behind" below).
+
+### Running the standalone binary
+
+```bash
+DATABASE_URL=postgres://iron_defer:iron_defer@localhost:5432/iron_defer \
+  cargo run -p iron-defer -- serve --port 8080
+```
+
+Other subcommands: `iron-defer submit`, `iron-defer tasks`, `iron-defer config validate`.
 
 ### SQLx offline mode
 
@@ -96,16 +109,32 @@ domain → application → infrastructure → api
 
 Precedence: defaults < `config.toml` < `config.{profile}.toml` < env vars (`IRON_DEFER__` prefix) < CLI flags.
 
+- Env vars use `__` (double underscore) as the nesting separator, e.g. `IRON_DEFER__DATABASE__URL`, `IRON_DEFER__WORKER__CONCURRENCY`.
+- Set `IRON_DEFER_PROFILE=<name>` to layer in `config.{name}.toml` on top of `config.toml`.
+- `DATABASE_URL` is also accepted as an alias for `IRON_DEFER__DATABASE__URL`.
+- `database.unlogged_tables = true` switches the tasks table to PostgreSQL `UNLOGGED` for high-throughput non-durable workloads. Data is lost on crash recovery and the option is mutually exclusive with `database.audit_log`.
+
 ## Test Infrastructure
 
 - Integration tests use `testcontainers` to spin up Postgres. A shared `OnceCell<TestDb>` in `crates/api/tests/common/mod.rs` lazily starts one container per test binary.
-- Tests skip gracefully if Docker is unavailable (unless `IRON_DEFER_REQUIRE_DB=1`).
+- Tests skip gracefully if Docker is unavailable. Set `IRON_DEFER_REQUIRE_DB=1` to fail instead of skip (use this in CI or when you specifically want DB-backed tests to run).
 - Use `common::unique_queue()` to scope tests to isolated queue names.
 - Use `common::fresh_pool_on_shared_container()` when tests start worker engines (avoids cross-runtime pool hangs).
 - Chaos tests (`chaos_*.rs`) simulate worker crashes, DB outages, max retries. They use `#[serial_test]`.
+
+## Reference Documentation
+
+When changing a subsystem, consult the relevant ADR or guideline before making non-trivial changes:
+
+- **ADRs** in `docs/adr/` — 0001 hexagonal architecture, 0002 error handling, 0003 configuration, 0004 async runtime, 0005 sqlx, 0006 serde.
+- **Guidelines** in `docs/guidelines/` — `rust-idioms.md`, `quality-gates.md`, `security.md`, `structured-logging.md`, `postgres-reconnection.md`, `compliance-evidence.md`.
 
 ## Rust Edition & MSRV
 
 - Edition: 2024
 - MSRV: 1.94
 - Formatter: `rustfmt.toml` sets `edition = "2024"`, `max_width = 100`
+
+## Commit conventions
+
+Imperative mood, present tense (`Add`, `Fix`, `Remove`). One logical change per PR. New behavior must include tests. See `CONTRIBUTING.md` for the full CI gate list.

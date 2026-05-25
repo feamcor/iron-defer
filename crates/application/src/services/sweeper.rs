@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::metrics::Metrics;
-use iron_defer_domain::{QueueName, TaskError, TaskId};
+use iron_defer_domain::{QueueName, TaskError, TaskId, TaskStatus};
 use opentelemetry::KeyValue;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
@@ -104,16 +104,16 @@ impl SweeperService {
                         "zombie task recovered"
                     );
                     // Emit transition event for zombie recovery
-                    crate::emit_otel_state_transition(
-                        trace_id.as_deref(),
-                        *id,
-                        "running",
-                        "pending",
-                        queue.as_str(),
-                        kind.as_str(),
-                        None, // sweeper recovery - no specific worker
-                        0,    // attempts unknown
-                    );
+                    // (sweeper recovery — no specific worker; attempts unknown)
+                    crate::StateTransitionEvent::builder()
+                        .task_id(*id)
+                        .from_status(TaskStatus::Running)
+                        .to_status(TaskStatus::Pending)
+                        .queue(queue.clone())
+                        .kind(kind.clone())
+                        .maybe_trace_id_hex(trace_id.clone())
+                        .build()
+                        .emit();
                 }
                 RecoveryOutcome::Failed => {
                     warn!(
@@ -124,16 +124,15 @@ impl SweeperService {
                         "zombie task failed (max attempts exhausted)"
                     );
                     // Emit transition event for zombie exhaustion
-                    crate::emit_otel_state_transition(
-                        trace_id.as_deref(),
-                        *id,
-                        "running",
-                        "failed",
-                        queue.as_str(),
-                        kind.as_str(),
-                        None,
-                        0,
-                    );
+                    crate::StateTransitionEvent::builder()
+                        .task_id(*id)
+                        .from_status(TaskStatus::Running)
+                        .to_status(TaskStatus::Failed)
+                        .queue(queue.clone())
+                        .kind(kind.clone())
+                        .maybe_trace_id_hex(trace_id.clone())
+                        .build()
+                        .emit();
                 }
             }
         }
@@ -269,16 +268,13 @@ impl SweeperService {
                                     queue = %queue,
                                     "task auto-failed: suspended too long"
                                 );
-                                crate::emit_otel_state_transition(
-                                    None,
-                                    *id,
-                                    "suspended",
-                                    "failed",
-                                    queue.as_str(),
-                                    "unknown",
-                                    None,
-                                    0,
-                                );
+                                crate::StateTransitionEvent::builder()
+                                    .task_id(*id)
+                                    .from_status(TaskStatus::Suspended)
+                                    .to_status(TaskStatus::Failed)
+                                    .queue(queue.clone())
+                                    .build()
+                                    .emit();
                                 if let Some(ref m) = self.metrics {
                                     m.suspend_timeout_total.add(1, &[KeyValue::new("queue", queue.to_string())]);
                                 }

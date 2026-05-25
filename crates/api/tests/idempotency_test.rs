@@ -444,3 +444,37 @@ async fn expired_key_allows_reuse_after_cleanup() {
         "reuse must create a different task"
     );
 }
+
+// ---------------------------------------------------------------------------
+// 9.6 — Key length validation
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn submit_with_oversized_idempotency_key_returns_400() {
+    let Some(pool) = common::fresh_pool_on_shared_container().await else {
+        eprintln!("[skip] Docker not available");
+        return;
+    };
+    let server = TestServer::start(&pool).await;
+    let queue = common::unique_queue();
+    let oversized_key = "a".repeat(251);
+
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .post(server.url("/tasks"))
+        .json(&json!({
+            "queue": queue,
+            "kind": "idemp_test",
+            "payload": {"data": "oversized"},
+            "idempotencyKey": oversized_key,
+        }))
+        .send()
+        .await
+        .expect("submit");
+
+    assert_eq!(resp.status(), 400, "oversized key should return 400 Bad Request");
+    let body: serde_json::Value = resp.json().await.expect("json");
+    let message = body["message"].as_str().expect("message must be string");
+    assert!(message.contains("idempotency key length 251 exceeds maximum of 250 characters"));
+}

@@ -53,9 +53,6 @@ pub mod cli;
 pub mod config;
 pub mod http;
 
-use std::future::Future;
-use std::marker::PhantomData;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -66,6 +63,59 @@ use sqlx::PgPool;
 use tracing::instrument;
 
 pub mod shutdown;
+mod task_handler_adapter;
+
+use task_handler_adapter::TaskHandlerAdapter;
+
+/// PostgreSQL table persistence mode, mirroring the single-character
+/// `pg_class.relpersistence` system-catalog column. Postgres only defines
+/// three values (`'p'`, `'u'`, `'t'`); any other value is rejected by
+/// [`TablePersistence::try_from`] as a forward-compatibility guard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TablePersistence {
+    /// `'p'` — permanent (WAL-backed). The default for `CREATE TABLE`.
+    Permanent,
+    /// `'u'` — UNLOGGED. Skips WAL; rows are truncated on crash recovery.
+    Unlogged,
+    /// `'t'` — temporary, session-scoped.
+    Temporary,
+}
+
+impl TablePersistence {
+    #[must_use]
+    pub fn is_unlogged(self) -> bool {
+        matches!(self, Self::Unlogged)
+    }
+
+    /// SQL keyword for `ALTER TABLE … SET <kw>`. `Temporary` is `None` —
+    /// Postgres does not let a regular table be converted to a temp table.
+    /// Note `Permanent` maps to `LOGGED`: Postgres' SQL grammar names the
+    /// "permanent" state by its WAL-backed property, not by `pg_class`'s
+    /// `'p'` code.
+    #[must_use]
+    pub fn alter_table_keyword(self) -> Option<&'static str> {
+        match self {
+            Self::Permanent => Some("LOGGED"),
+            Self::Unlogged => Some("UNLOGGED"),
+            Self::Temporary => None,
+        }
+    }
+}
+
+impl TryFrom<&str> for TablePersistence {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        match s {
+            "p" => Ok(Self::Permanent),
+            "u" => Ok(Self::Unlogged),
+            "t" => Ok(Self::Temporary),
+            other => Err(format!(
+                "unknown pg_class.relpersistence value: {other:?}"
+            )),
+        }
+    }
+}
 
 // Public re-exports — the iron-defer library API surface.
 //
@@ -82,50 +132,10 @@ pub use iron_defer_application::{
 pub use iron_defer_domain::{
     CancelResult, ExecutionErrorKind, ListTasksFilter, ListTasksResult, PayloadErrorKind,
     QueueName, QueueStatistics, Task, TaskContext, TaskError, TaskId, TaskRecord, TaskStatus,
-    WorkerStatus,
+    WorkerStatus, IDEMPOTENCY_KEY_MAX_LEN, REGION_MAX_LEN,
 };
 pub use iron_defer_infrastructure::create_metrics;
 pub use tokio_util::sync::CancellationToken;
-
-// ----------------------------------------------------------------------------
-// TaskHandlerAdapter — bridges `impl Task` to `Arc<dyn TaskHandler>`.
-// ----------------------------------------------------------------------------
-
-/// Generic adapter that turns a concrete `T: Task` into a type-erased
-/// `TaskHandler`.
-///
-/// Architecture §C4 specifies this exact pattern. The adapter
-/// holds zero state — it only carries the `T` type parameter so the
-/// `execute` method can deserialize the payload into the right concrete
-/// type before calling `T::execute(ctx)`.
-struct TaskHandlerAdapter<T: Task>(PhantomData<T>);
-
-impl<T: Task> TaskHandler for TaskHandlerAdapter<T> {
-    fn kind(&self) -> &'static str {
-        T::KIND
-    }
-
-    fn execute<'a>(
-        &'a self,
-        payload: &'a serde_json::Value,
-        ctx: &'a TaskContext,
-    ) -> Pin<Box<dyn Future<Output = Result<(), TaskError>> + Send + 'a>> {
-        Box::pin(async move {
-            // Deserialize via the by-reference `Deserializer` impl on
-            // `&serde_json::Value` so we avoid cloning the entire JSON tree
-            // on the per-task hot path. Architecture §C4 calls out
-            // explicit allocation control as the reason this trait does
-            // NOT use `#[async_trait]`; honoring that intent means avoiding
-            // hidden payload clones too.
-            let task: T = T::deserialize(payload).map_err(|e| TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Deserialization {
-                    message: e.to_string(),
-                },
-            })?;
-            task.execute(ctx).await
-        })
-    }
-}
 
 // ----------------------------------------------------------------------------
 // IronDefer — embedded library engine.
@@ -148,7 +158,7 @@ pub struct IronDefer {
     producer_config: iron_defer_application::ProducerConfig,
     queue: QueueName,
     /// `OTel` metric instrument handles for the worker and sweeper.
-    metrics: Option<iron_defer_application::Metrics>,
+    metrics: Option<Metrics>,
     /// Prometheus registry for the `/metrics` scrape endpoint (FR18).
     /// `None` when metrics are not configured (embedded mode without `OTel`).
     pub(crate) prometheus_registry: Option<prometheus::Registry>,
@@ -170,7 +180,7 @@ impl IronDefer {
                     .any(|allowed| allowed == r)
             {
                 return Err(TaskError::InvalidPayload {
-                    kind: iron_defer_domain::PayloadErrorKind::Validation {
+                    kind: PayloadErrorKind::Validation {
                         message: format!(
                             "unauthorized region '{r}'; allowed regions: {:?}",
                             self.producer_config.allowed_regions
@@ -387,23 +397,7 @@ impl IronDefer {
         task: T,
         idempotency_key: &str,
     ) -> Result<(TaskRecord, bool), TaskError> {
-        if idempotency_key.is_empty() {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "idempotency key must not be empty".to_owned(),
-                },
-            });
-        }
-        if idempotency_key.len() > 250 {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!(
-                        "idempotency key length {} exceeds maximum of 250 characters",
-                        idempotency_key.len()
-                    ),
-                },
-            });
-        }
+        validate_idempotency_key(idempotency_key)?;
         if self.registry.get(T::KIND).is_none() {
             return Err(TaskError::InvalidPayload {
                 kind: PayloadErrorKind::Validation {
@@ -455,23 +449,7 @@ impl IronDefer {
         region: &str,
     ) -> Result<(TaskRecord, bool), TaskError> {
         validate_region(region)?;
-        if idempotency_key.is_empty() {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "idempotency key must not be empty".to_owned(),
-                },
-            });
-        }
-        if idempotency_key.len() > 250 {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!(
-                        "idempotency key length {} exceeds maximum of 250 characters",
-                        idempotency_key.len()
-                    ),
-                },
-            });
-        }
+        validate_idempotency_key(idempotency_key)?;
         if self.registry.get(T::KIND).is_none() {
             return Err(TaskError::InvalidPayload {
                 kind: PayloadErrorKind::Validation {
@@ -582,23 +560,7 @@ impl IronDefer {
         idempotency_key: &str,
         region: Option<&str>,
     ) -> Result<(TaskRecord, bool), TaskError> {
-        if idempotency_key.is_empty() {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "idempotency key must not be empty".to_owned(),
-                },
-            });
-        }
-        if idempotency_key.len() > 250 {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!(
-                        "idempotency key length {} exceeds maximum of 250 characters",
-                        idempotency_key.len()
-                    ),
-                },
-            });
-        }
+        validate_idempotency_key(idempotency_key)?;
         if let Some(r) = region {
             if r.is_empty() {
                 return Err(TaskError::InvalidPayload {
@@ -719,10 +681,10 @@ impl IronDefer {
     ///
     /// Returns `TaskError::Storage` if the database operation fails.
     #[instrument(skip(self), fields(task_id = %id), err)]
-    pub async fn cancel(&self, id: TaskId) -> Result<iron_defer_domain::CancelResult, TaskError> {
+    pub async fn cancel(&self, id: TaskId) -> Result<CancelResult, TaskError> {
         let result = self.scheduler.cancel(id).await?;
 
-        if let iron_defer_domain::CancelResult::Cancelled(ref record) = result {
+        if let CancelResult::Cancelled(ref record) = result {
             tracing::info!(
                 event = "task_cancelled",
                 task_id = %record.id(),
@@ -865,7 +827,7 @@ impl IronDefer {
             sweeper_token,
         )
         .with_suspend_timeout(self.worker_config.suspend_timeout)
-        .with_saturation_classifier(std::sync::Arc::new(
+        .with_saturation_classifier(Arc::new(
             iron_defer_infrastructure::is_pool_timeout,
         ));
         if let Some(ref m) = self.metrics {
@@ -879,8 +841,8 @@ impl IronDefer {
         });
 
         let worker_id = iron_defer_domain::WorkerId::new();
-        let checkpoint_writer: std::sync::Arc<dyn iron_defer_domain::CheckpointWriter> =
-            std::sync::Arc::new(iron_defer_infrastructure::PostgresCheckpointWriter::new(
+        let checkpoint_writer: Arc<dyn iron_defer_domain::CheckpointWriter> =
+            Arc::new(iron_defer_infrastructure::PostgresCheckpointWriter::new(
                 self.pool.clone(),
             ));
         let worker = WorkerService::builder()
@@ -890,7 +852,7 @@ impl IronDefer {
             .queue(self.queue.clone())
             .token(worker_token)
             .worker_id(worker_id)
-            .is_saturation(std::sync::Arc::new(
+            .is_saturation(Arc::new(
                 iron_defer_infrastructure::is_pool_timeout,
             ))
             .maybe_metrics(self.metrics.clone())
@@ -947,16 +909,15 @@ impl IronDefer {
                         "released leases for timed-out in-flight tasks"
                     );
                     for (id, trace_id) in released {
-                        iron_defer_application::emit_otel_state_transition(
-                            trace_id.as_deref(),
-                            id,
-                            "running",
-                            "pending",
-                            "unknown", // queue/kind unknown at this site
-                            "unknown",
-                            Some(worker_id),
-                            0, // attempts unknown
-                        );
+                        // queue/kind/attempts are unknown at this site
+                        iron_defer_application::StateTransitionEvent::builder()
+                            .task_id(id)
+                            .from_status(iron_defer_domain::TaskStatus::Running)
+                            .to_status(iron_defer_domain::TaskStatus::Pending)
+                            .maybe_trace_id_hex(trace_id)
+                            .worker_id(worker_id)
+                            .build()
+                            .emit();
                     }
                 }
                 Err(e) => {
@@ -1007,7 +968,7 @@ impl IronDefer {
                     source: Box::new(e),
                 })?;
 
-        let router = crate::http::router::build(Arc::clone(self));
+        let router = http::router::build(Arc::clone(self));
 
         axum::serve(listener, router)
             .with_graceful_shutdown(token.cancelled_owned())
@@ -1114,23 +1075,7 @@ impl IronDefer {
         region: Option<&str>,
     ) -> Result<(TaskRecord, bool), TaskError> {
         self.validate_region_authorization(region)?;
-        if idempotency_key.is_empty() {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "idempotency key must not be empty".to_owned(),
-                },
-            });
-        }
-        if idempotency_key.len() > 250 {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!(
-                        "idempotency key length {} exceeds maximum of 250 characters",
-                        idempotency_key.len()
-                    ),
-                },
-            });
-        }
+        validate_idempotency_key(idempotency_key)?;
         if kind.is_empty() {
             return Err(TaskError::InvalidPayload {
                 kind: PayloadErrorKind::Validation {
@@ -1198,11 +1143,11 @@ fn validate_region(region: &str) -> Result<(), TaskError> {
             },
         });
     }
-    if region.len() > 63 {
+    if region.len() > REGION_MAX_LEN {
         return Err(TaskError::InvalidPayload {
             kind: PayloadErrorKind::Validation {
                 message: format!(
-                    "region label length {} exceeds maximum of 63 characters",
+                    "region label length {} exceeds maximum of {REGION_MAX_LEN} characters",
                     region.len()
                 ),
             },
@@ -1216,6 +1161,27 @@ fn validate_region(region: &str) -> Result<(), TaskError> {
             kind: PayloadErrorKind::Validation {
                 message: format!(
                     "region label '{region}' must contain only lowercase ASCII letters, digits, and hyphens"
+                ),
+            },
+        });
+    }
+    Ok(())
+}
+
+fn validate_idempotency_key(idempotency_key: &str) -> Result<(), TaskError> {
+    if idempotency_key.is_empty() {
+        return Err(TaskError::InvalidPayload {
+            kind: PayloadErrorKind::Validation {
+                message: "idempotency key must not be empty".to_owned(),
+            },
+        });
+    }
+    if idempotency_key.len() > IDEMPOTENCY_KEY_MAX_LEN {
+        return Err(TaskError::InvalidPayload {
+            kind: PayloadErrorKind::Validation {
+                message: format!(
+                    "idempotency key length {} exceeds maximum of {IDEMPOTENCY_KEY_MAX_LEN} characters",
+                    idempotency_key.len()
                 ),
             },
         });
@@ -1316,7 +1282,7 @@ pub struct IronDeferBuilder {
     producer_cfg: iron_defer_application::ProducerConfig,
     database_config: DatabaseConfig,
     queue: Option<String>,
-    metrics: Option<iron_defer_application::Metrics>,
+    metrics: Option<Metrics>,
     prometheus_registry: Option<prometheus::Registry>,
     readiness_timeout: std::time::Duration,
 }
@@ -1358,7 +1324,7 @@ impl IronDeferBuilder {
     /// overwrites the previous entry.
     #[must_use]
     pub fn register<T: Task>(mut self) -> Self {
-        let handler: Arc<dyn TaskHandler> = Arc::new(TaskHandlerAdapter::<T>(PhantomData));
+        let handler: Arc<dyn TaskHandler> = Arc::new(TaskHandlerAdapter::<T>::new());
         self.registry.register(handler);
         self
     }
@@ -1420,10 +1386,10 @@ impl IronDeferBuilder {
 
     /// Provide `OTel` metric instrument handles for the worker and sweeper.
     ///
-    /// Embedded callers create a [`Metrics`](iron_defer_application::Metrics)
-    /// from their own `Meter` via [`create_metrics`](iron_defer_infrastructure::create_metrics).
+    /// Embedded callers create a [`Metrics`](Metrics)
+    /// from their own `Meter` via [`create_metrics`](create_metrics).
     #[must_use]
-    pub fn metrics(mut self, metrics: iron_defer_application::Metrics) -> Self {
+    pub fn metrics(mut self, metrics: Metrics) -> Self {
         self.metrics = Some(metrics);
         self
     }
@@ -1550,16 +1516,21 @@ impl IronDeferBuilder {
             return Ok(());
         };
 
-        let is_unlogged = persistence == "u";
+        let persistence = TablePersistence::try_from(persistence.as_str()).map_err(|msg| {
+            TaskError::Storage {
+                source: msg.into(),
+            }
+        })?;
+        let is_unlogged = persistence.is_unlogged();
 
         if want_unlogged && !is_unlogged {
             tracing::warn!(
                 "converting tasks table to UNLOGGED — data will be LOST on Postgres crash recovery"
             );
-            Self::set_table_persistence(pool, "UNLOGGED").await?;
+            Self::set_table_persistence(pool, TablePersistence::Unlogged).await?;
         } else if !want_unlogged && is_unlogged {
             tracing::warn!("restoring tasks table to LOGGED (WAL-backed)");
-            Self::set_table_persistence(pool, "LOGGED").await?;
+            Self::set_table_persistence(pool, TablePersistence::Permanent).await?;
         }
 
         if want_unlogged {
@@ -1580,7 +1551,14 @@ impl IronDeferBuilder {
     /// UNLOGGED tables, so when converting to UNLOGGED we drop the FK
     /// (audit_log is disabled via mutual exclusion anyway). When restoring
     /// to LOGGED we re-add the FK so audit log integrity is preserved.
-    async fn set_table_persistence(pool: &PgPool, mode: &str) -> Result<(), TaskError> {
+    async fn set_table_persistence(
+        pool: &PgPool,
+        target: TablePersistence,
+    ) -> Result<(), TaskError> {
+        let keyword = target
+            .alter_table_keyword()
+            .expect("Temporary cannot be set via ALTER TABLE — only Permanent and Unlogged");
+
         let has_audit_table: bool = sqlx::query_scalar(
             "SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'task_audit_log')",
         )
@@ -1618,16 +1596,16 @@ impl IronDeferBuilder {
             })?;
         }
 
-        sqlx::query(&format!("ALTER TABLE tasks SET {mode}"))
+        sqlx::query(&format!("ALTER TABLE tasks SET {keyword}"))
             .execute(pool)
             .await
             .map_err(|e| TaskError::Storage {
-                source: format!("ALTER TABLE tasks SET {mode} failed: {e}").into(),
+                source: format!("ALTER TABLE tasks SET {keyword} failed: {e}").into(),
             })?;
 
-        // Restore FK only when converting back to LOGGED (both tables are
+        // Restore FK only when converting back to permanent (both tables are
         // now permanent, so the FK is valid).
-        if mode == "LOGGED" {
+        if target == TablePersistence::Permanent {
             if let Some(ref name) = fk_name {
                 // Delete orphaned audit rows before restoring the FK. This can
                 // happen after a Postgres crash in UNLOGGED mode.
@@ -1660,8 +1638,6 @@ impl IronDeferBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iron_defer_domain::WorkerId;
-    use serde::{Deserialize, Serialize};
 
     // Verify the builder default constructs an empty registry. The
     // builder cannot be exercised end-to-end without a real PgPool, so
@@ -1681,74 +1657,9 @@ mod tests {
         assert!(builder.skip_migrations);
     }
 
-    /// Test fixture: a minimal `Task` impl used to exercise
-    /// `TaskHandlerAdapter` directly.
-    #[derive(Debug, PartialEq, Serialize, Deserialize)]
-    struct UnitTestTask {
-        n: i32,
-    }
-
-    impl Task for UnitTestTask {
-        const KIND: &'static str = "unit_test_task";
-
-        async fn execute(&self, _ctx: &TaskContext) -> Result<(), TaskError> {
-            Ok(())
-        }
-    }
-
-    fn sample_ctx() -> TaskContext {
-        TaskContext::new(
-            TaskId::new(),
-            WorkerId::new(),
-            iron_defer_domain::AttemptCount::new(1).unwrap(),
-        )
-    }
-
-    #[tokio::test]
-    async fn task_handler_adapter_kind_matches_task_kind() {
-        let adapter = TaskHandlerAdapter::<UnitTestTask>(PhantomData);
-        assert_eq!(adapter.kind(), UnitTestTask::KIND);
-    }
-
-    #[tokio::test]
-    async fn task_handler_adapter_executes_valid_payload() {
-        let adapter: Arc<dyn TaskHandler> =
-            Arc::new(TaskHandlerAdapter::<UnitTestTask>(PhantomData));
-        let payload = serde_json::to_value(UnitTestTask { n: 42 }).expect("serialize");
-        let ctx = sample_ctx();
-
-        let result = adapter.execute(&payload, &ctx).await;
-        assert!(result.is_ok(), "expected Ok, got {result:?}");
-    }
-
-    #[tokio::test]
-    async fn task_handler_adapter_maps_serde_error_to_invalid_payload() {
-        let adapter: Arc<dyn TaskHandler> =
-            Arc::new(TaskHandlerAdapter::<UnitTestTask>(PhantomData));
-        // Wrong shape: missing required field `n`.
-        let bad_payload = serde_json::json!({"wrong": "shape"});
-        let ctx = sample_ctx();
-
-        let err = adapter
-            .execute(&bad_payload, &ctx)
-            .await
-            .expect_err("malformed payload must error");
-        match err {
-            TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Deserialization { message },
-            } => {
-                assert!(
-                    message.contains("missing field") || message.contains('n'),
-                    "expected serde error mentioning the missing field, got: {message}"
-                );
-            }
-            other => panic!("expected InvalidPayload::Deserialization, got {other:?}"),
-        }
-    }
-
     #[test]
     fn validate_scheduled_at_accepts_epoch() {
-        let dt = chrono::DateTime::UNIX_EPOCH;
+        let dt = DateTime::UNIX_EPOCH;
         assert!(validate_scheduled_at(&dt).is_ok());
     }
 
@@ -1774,5 +1685,72 @@ mod tests {
             }
             other => panic!("expected InvalidPayload::Validation, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn validate_region_accepts_valid() {
+        assert!(validate_region("us-east-1").is_ok());
+        assert!(validate_region("a").is_ok());
+        assert!(validate_region("1").is_ok());
+        assert!(validate_region("a-b-c").is_ok());
+        assert!(validate_region(&"a".repeat(REGION_MAX_LEN)).is_ok());
+    }
+
+    #[test]
+    fn validate_region_rejects_empty() {
+        let err = validate_region("").unwrap_err();
+        assert!(matches!(
+            err,
+            TaskError::InvalidPayload {
+                kind: PayloadErrorKind::Validation { ref message }
+            } if message.contains("must not be empty")
+        ));
+    }
+
+    #[test]
+    fn validate_region_rejects_too_long() {
+        let long_region = "a".repeat(REGION_MAX_LEN + 1);
+        let err = validate_region(&long_region).unwrap_err();
+        assert!(matches!(
+            err,
+            TaskError::InvalidPayload {
+                kind: PayloadErrorKind::Validation { ref message }
+            } if message.contains("exceeds maximum of")
+        ));
+    }
+
+    #[test]
+    fn validate_region_rejects_invalid_chars() {
+        assert!(validate_region("US-EAST-1").is_err()); // Uppercase
+        assert!(validate_region("us_east_1").is_err()); // Underscore
+        assert!(validate_region("us east").is_err()); // Space
+        assert!(validate_region("us!east").is_err()); // Special char
+    }
+
+    #[test]
+    fn table_persistence_try_from_accepts_known_codes() {
+        assert_eq!(TablePersistence::try_from("p"), Ok(TablePersistence::Permanent));
+        assert_eq!(TablePersistence::try_from("u"), Ok(TablePersistence::Unlogged));
+        assert_eq!(TablePersistence::try_from("t"), Ok(TablePersistence::Temporary));
+    }
+
+    #[test]
+    fn table_persistence_try_from_rejects_unknown_code() {
+        let err = TablePersistence::try_from("x").unwrap_err();
+        assert!(err.contains("unknown pg_class.relpersistence value"), "{err}");
+    }
+
+    #[test]
+    fn table_persistence_is_unlogged() {
+        assert!(TablePersistence::Unlogged.is_unlogged());
+        assert!(!TablePersistence::Permanent.is_unlogged());
+        assert!(!TablePersistence::Temporary.is_unlogged());
+    }
+
+    #[test]
+    fn table_persistence_alter_table_keyword() {
+        assert_eq!(TablePersistence::Permanent.alter_table_keyword(), Some("LOGGED"));
+        assert_eq!(TablePersistence::Unlogged.alter_table_keyword(), Some("UNLOGGED"));
+        assert_eq!(TablePersistence::Temporary.alter_table_keyword(), None);
     }
 }

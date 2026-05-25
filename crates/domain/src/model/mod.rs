@@ -15,6 +15,6 @@ pub use priority::Priority;
 pub use queue::{QueueName, QueueStatistics};
 pub use task::{
     CancelResult, CheckpointWriter, ListTasksFilter, ListTasksResult, Task, TaskContext, TaskId,
-    TaskRecord, TaskStatus, SIGNAL_PAYLOAD_MAX_BYTES,
+    TaskRecord, TaskStatus, IDEMPOTENCY_KEY_MAX_LEN, REGION_MAX_LEN, SIGNAL_PAYLOAD_MAX_BYTES,
 };
 pub use worker::{WorkerId, WorkerStatus};

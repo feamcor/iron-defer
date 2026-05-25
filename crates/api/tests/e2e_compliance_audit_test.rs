@@ -2,9 +2,8 @@ mod common;
 
 use std::time::Duration;
 
-use common::e2e::{self, AuditRow, E2eTask};
+use common::e2e::{self, E2eTask};
 use serde_json::json;
-use uuid::Uuid;
 
 const TIMEOUT: Duration = Duration::from_secs(15);
 

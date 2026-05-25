@@ -68,7 +68,7 @@ impl Task for AuditFlakyTask {
     async fn execute(&self, _ctx: &TaskContext) -> Result<(), TaskError> {
         Err(TaskError::ExecutionFailed {
             kind: iron_defer::ExecutionErrorKind::HandlerFailed {
-                reason: "synthetic-terminal".into(),
+                source: "synthetic-terminal".into(),
             },
         })
     }

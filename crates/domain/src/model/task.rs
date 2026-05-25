@@ -231,6 +231,20 @@ impl TaskRecord {
             self.claimed_by.is_some() == self.claimed_until.is_some(),
             "claimed_by and claimed_until must be set/unset together"
         );
+        if let Some(ref key) = self.idempotency_key {
+            debug_assert!(
+                key.len() <= IDEMPOTENCY_KEY_MAX_LEN,
+                "idempotency key length {} exceeds maximum of {IDEMPOTENCY_KEY_MAX_LEN}",
+                key.len()
+            );
+        }
+        if let Some(ref region) = self.region {
+            debug_assert!(
+                region.len() <= REGION_MAX_LEN,
+                "region length {} exceeds maximum of {REGION_MAX_LEN}",
+                region.len()
+            );
+        }
     }
 
     #[must_use]
@@ -324,6 +338,26 @@ pub trait CheckpointWriter: Send + Sync {
 
 const CHECKPOINT_MAX_BYTES: usize = 1_048_576;
 pub const SIGNAL_PAYLOAD_MAX_BYTES: usize = 1_048_576; // 1 MiB
+/// Maximum region label length in bytes. Chosen as 63 to align with the
+/// DNS-1123 label convention used by Kubernetes label values, RFC 1035 DNS
+/// labels, and Postgres `NAMEDATALEN - 1`. The accompanying character set
+/// (lowercase ASCII letters, digits, hyphen — enforced at the API façade)
+/// matches the same convention, so common cloud region IDs (`us-east-1`,
+/// `eu-west-2`, `ap-south-1`) and Kubernetes zone labels fit naturally.
+/// The cap also bounds the cardinality of the `region` OTel metric label
+/// and tracing field.
+pub const REGION_MAX_LEN: usize = 63;
+
+/// Maximum idempotency key length in bytes. Chosen as 250 to stay well
+/// under Postgres's B-tree key-size limit for the unique partial index
+/// `(queue, idempotency_key)` (migration 0004) while reserving headroom
+/// for `queue` (up to [`QueueName::MAX_LEN`]). Matches Stripe's 255-char
+/// idempotency-key convention with a small safety margin. Typical client
+/// shapes — UUID v4 (36 chars), ULID (26 chars), or short domain IDs —
+/// fit comfortably.
+///
+/// [`QueueName::MAX_LEN`]: crate::QueueName::MAX_LEN
+pub const IDEMPOTENCY_KEY_MAX_LEN: usize = 250;
 
 #[derive(Clone)]
 #[non_exhaustive]
@@ -590,6 +624,31 @@ mod tests {
         assert!(
             result.is_err(),
             "expected debug_assert to fire for claimed_by without claimed_until"
+        );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn validate_invariants_panics_on_too_long_region() {
+        let now = chrono::Utc::now();
+        let record = TaskRecord::builder()
+            .id(TaskId::new())
+            .queue(QueueName::try_from("test").unwrap())
+            .kind(TaskKind::try_from("test").unwrap())
+            .payload(Arc::new(serde_json::json!({})))
+            .status(TaskStatus::Pending)
+            .priority(crate::model::priority::Priority::new(0))
+            .attempts(crate::model::attempts::AttemptCount::ZERO)
+            .max_attempts(crate::model::attempts::MaxAttempts::DEFAULT)
+            .scheduled_at(now)
+            .created_at(now)
+            .updated_at(now)
+            .region("a".repeat(REGION_MAX_LEN + 1))
+            .build();
+        let result = std::panic::catch_unwind(|| record.validate_invariants());
+        assert!(
+            result.is_err(),
+            "expected debug_assert to fire for region length > REGION_MAX_LEN"
         );
     }
 

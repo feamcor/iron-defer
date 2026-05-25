@@ -3,7 +3,7 @@ mod common;
 use std::sync::Arc;
 use std::time::Duration;
 
-use iron_defer::{DatabaseConfig, IronDefer, Task, TaskContext, TaskError, WorkerConfig};
+use iron_defer::{DatabaseConfig, IronDefer, TablePersistence, WorkerConfig};
 use serial_test::serial;
 use sqlx::PgPool;
 
@@ -20,7 +20,7 @@ fn fast_worker_config() -> WorkerConfig {
     }
 }
 
-async fn query_table_persistence(pool: &PgPool, table: &str) -> Option<String> {
+async fn query_table_persistence(pool: &PgPool, table: &str) -> Option<TablePersistence> {
     let row: Option<(String,)> = sqlx::query_as(
         "SELECT relpersistence::text FROM pg_class WHERE relname = $1",
     )
@@ -28,7 +28,7 @@ async fn query_table_persistence(pool: &PgPool, table: &str) -> Option<String> {
     .fetch_optional(pool)
     .await
     .expect("query pg_class");
-    row.map(|r| r.0)
+    row.map(|r| TablePersistence::try_from(r.0.as_str()).expect("known relpersistence value"))
 }
 
 /// AC2: Startup rejected when both unlogged_tables and audit_log are true.
@@ -85,7 +85,11 @@ async fn unlogged_tables_flag_converts_table() {
 
     // Table should start as LOGGED (from normal migrations)
     let persistence = query_table_persistence(&pool, "tasks").await;
-    assert_eq!(persistence.as_deref(), Some("p"), "tasks table should be LOGGED initially");
+    assert_eq!(
+        persistence,
+        Some(TablePersistence::Permanent),
+        "tasks table should be LOGGED initially"
+    );
 
     // Build engine with unlogged_tables=true
     let engine = IronDefer::builder()
@@ -104,7 +108,11 @@ async fn unlogged_tables_flag_converts_table() {
 
     // Table should now be UNLOGGED
     let persistence = query_table_persistence(&pool, "tasks").await;
-    assert_eq!(persistence.as_deref(), Some("u"), "tasks table should be UNLOGGED after build");
+    assert_eq!(
+        persistence,
+        Some(TablePersistence::Unlogged),
+        "tasks table should be UNLOGGED after build"
+    );
 
     // Restore to LOGGED for other tests sharing this container.
     // Build a LOGGED engine which handles FK constraint restoration.
@@ -140,7 +148,7 @@ async fn unlogged_to_logged_restores_wal() {
         .await
         .expect("build unlogged engine");
     let persistence = query_table_persistence(&pool, "tasks").await;
-    assert_eq!(persistence.as_deref(), Some("u"));
+    assert_eq!(persistence, Some(TablePersistence::Unlogged));
 
     // Build engine with unlogged_tables=false — should restore to LOGGED
     let _engine = IronDefer::builder()
@@ -156,7 +164,11 @@ async fn unlogged_to_logged_restores_wal() {
         .expect("build logged engine");
 
     let persistence = query_table_persistence(&pool, "tasks").await;
-    assert_eq!(persistence.as_deref(), Some("p"), "tasks table should be LOGGED after restore");
+    assert_eq!(
+        persistence,
+        Some(TablePersistence::Permanent),
+        "tasks table should be LOGGED after restore"
+    );
 }
 
 /// AC1: Basic operations work identically in UNLOGGED mode.

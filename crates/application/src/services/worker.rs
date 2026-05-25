@@ -192,16 +192,17 @@ impl WorkerService {
                                 );
                                 // claim succeeded but shutdown detected — release back to pending immediately
                                 if let Ok(Some(trace_id)) = self.repo.release_lease_for_task(task.id()).await {
-                                    crate::emit_otel_state_transition(
-                                        Some(&trace_id),
-                                        task.id(),
-                                        "running",
-                                        "pending",
-                                        task.queue().as_str(),
-                                        task.kind().as_str(),
-                                        Some(worker_id),
-                                        task.attempts().get(),
-                                    );
+                                    crate::StateTransitionEvent::builder()
+                                        .task_id(task.id())
+                                        .from_status(TaskStatus::Running)
+                                        .to_status(TaskStatus::Pending)
+                                        .queue(task.queue().clone())
+                                        .kind(task.kind().clone())
+                                        .trace_id_hex(trace_id)
+                                        .worker_id(worker_id)
+                                        .attempt(task.attempts().get())
+                                        .build()
+                                        .emit();
                                 }
                                 drop(permit);
                                 break;

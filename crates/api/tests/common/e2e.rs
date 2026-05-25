@@ -4,8 +4,10 @@
 //! workers and an HTTP server on an ephemeral port, backed by the shared
 //! testcontainers Postgres instance.
 
+#![allow(dead_code)]
+
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use iron_defer::{

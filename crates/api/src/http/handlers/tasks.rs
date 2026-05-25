@@ -303,16 +303,16 @@ pub async fn delete_task(
 
     match engine.cancel(task_id).await? {
         CancelResult::Cancelled(record) => {
-            iron_defer_application::emit_otel_state_transition(
-                record.trace_id(),
-                record.id(),
-                "pending",
-                "cancelled",
-                record.queue().as_str(),
-                record.kind().as_str(),
-                None, // manual cancellation - no specific worker
-                record.attempts().get(),
-            );
+            iron_defer_application::StateTransitionEvent::builder()
+                .task_id(record.id())
+                .from_status(TaskStatus::Pending)
+                .to_status(TaskStatus::Cancelled)
+                .queue(record.queue().clone())
+                .kind(record.kind().clone())
+                .maybe_trace_id_hex(record.trace_id())
+                .attempt(record.attempts().get())
+                .build()
+                .emit();
             Ok(Json(TaskResponse::from(record)))
         }
         CancelResult::NotFound => Err(TaskError::NotFound { id: task_id }.into()),
