@@ -73,7 +73,7 @@ cargo sqlx prepare --workspace
 After **every** `cargo test` invocation (whether it passes, fails, or is interrupted), you MUST clean up Docker containers spawned by testcontainers:
 
 ```bash
-docker ps -aq --filter "label=org.testcontainers=true" | xargs -r docker rm -f 2>/dev/null; docker ps -aq --filter "ancestor=postgres:11-alpine" | xargs -r docker rm -f 2>/dev/null
+docker ps -aq --filter "label=org.testcontainers=true" | xargs -r docker rm -f 2>/dev/null; docker ps -aq --filter "ancestor=postgres:18-alpine" | xargs -r docker rm -f 2>/dev/null
 ```
 
 This applies to ALL test commands: single-package tests, workspace-wide tests, integration tests, chaos tests, and any ad-hoc `cargo test` variant. No exceptions.

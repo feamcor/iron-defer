@@ -10,6 +10,10 @@ use testcontainers::{ContainerAsync, ImageExt};
 use testcontainers_modules::postgres::Postgres;
 use testcontainers_modules::testcontainers::runners::AsyncRunner;
 
+/// Pinned Postgres image tag for chaos containers. `testcontainers-modules`
+/// defaults to `11-alpine`; keep tests aligned with the compose/CI version.
+const POSTGRES_TAG: &str = "18-alpine";
+
 /// Start a fresh isolated Postgres container, run migrations, and return
 /// `(pool, container, url, port)`.
 ///
@@ -29,6 +33,7 @@ pub async fn boot_isolated_chaos_db() -> (PgPool, ContainerAsync<Postgres>, Stri
     };
 
     let container = Postgres::default()
+        .with_tag(POSTGRES_TAG)
         .with_mapped_port(port, 5432.tcp())
         .start()
         .await

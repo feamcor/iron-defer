@@ -32,7 +32,7 @@ Use this before production rollouts and regularly in staging/CI.
 3. After each `cargo test`, clean up testcontainers:
 
    ```sh
-   docker ps -aq --filter "label=org.testcontainers=true" | xargs -r docker rm -f 2>/dev/null; docker ps -aq --filter "ancestor=postgres:11-alpine" | xargs -r docker rm -f 2>/dev/null
+   docker ps -aq --filter "label=org.testcontainers=true" | xargs -r docker rm -f 2>/dev/null; docker ps -aq --filter "ancestor=postgres:18-alpine" | xargs -r docker rm -f 2>/dev/null
    ```
 
 ## Verification

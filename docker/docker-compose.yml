@@ -1,12 +1,14 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # Postgres 18 changed PGDATA to /var/lib/postgresql/18/docker and moved
+    # the declared volume to /var/lib/postgresql, so mount the parent dir.
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: iron_defer
       POSTGRES_PASSWORD: iron_defer
       POSTGRES_DB: iron_defer
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U iron_defer"]
       interval: 5s
