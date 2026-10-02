@@ -1,9 +1,9 @@
 mod common;
 
-use std::sync::Arc;
-use std::time::Duration;
 use std::collections::HashMap;
-use std::sync::{Mutex, LazyLock};
+use std::sync::Arc;
+use std::sync::{LazyLock, Mutex};
+use std::time::Duration;
 use tokio::sync::Notify;
 
 static VISIBILITY_NOTIFY: LazyLock<Mutex<HashMap<String, Arc<Notify>>>> =
@@ -65,22 +65,19 @@ async fn e2e_checkpoint_crash_recovery() {
         return;
     };
     let client = reqwest::Client::new();
-    let task_id = enqueue_checkpoint_task_with_max_attempts(
-        &client,
-        &server.base_url,
-        &queue,
-        &task,
-        2,
-    )
-    .await;
+    let task_id =
+        enqueue_checkpoint_task_with_max_attempts(&client, &server.base_url, &queue, &task, 2)
+            .await;
 
     let result =
         e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let cp =
-        e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
-    assert!(cp.is_none(), "checkpoint should be cleared after completion");
+    let cp = e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
+    assert!(
+        cp.is_none(),
+        "checkpoint should be cleared after completion"
+    );
 
     server.shutdown().await;
 }
@@ -95,30 +92,21 @@ async fn e2e_checkpoint_crash_recovery() {
 #[tokio::test]
 async fn e2e_checkpoint_multiple_retries() {
     let queue = common::unique_queue();
-    let task = CheckpointStepTask::with_failures(
-        6,
-        vec![(1, 2), (2, 2), (2, 4), (3, 2), (3, 4)],
-    );
+    let task = CheckpointStepTask::with_failures(6, vec![(1, 2), (2, 2), (2, 4), (3, 2), (3, 4)]);
     let Some((server, pool)) = e2e::boot_e2e_engine_with_checkpoint(&queue, &task).await else {
         eprintln!("[skip] Docker not available");
         return;
     };
     let client = reqwest::Client::new();
-    let task_id = enqueue_checkpoint_task_with_max_attempts(
-        &client,
-        &server.base_url,
-        &queue,
-        &task,
-        3,
-    )
-    .await;
+    let task_id =
+        enqueue_checkpoint_task_with_max_attempts(&client, &server.base_url, &queue, &task, 3)
+            .await;
 
     let result =
         e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let cp =
-        e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
+    let cp = e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
     assert!(cp.is_none(), "checkpoint cleared after completion");
 
     server.shutdown().await;
@@ -134,14 +122,9 @@ async fn e2e_checkpoint_none_first_attempt() {
         return;
     };
     let client = reqwest::Client::new();
-    let task_id = enqueue_checkpoint_task_with_max_attempts(
-        &client,
-        &server.base_url,
-        &queue,
-        &task,
-        1,
-    )
-    .await;
+    let task_id =
+        enqueue_checkpoint_task_with_max_attempts(&client, &server.base_url, &queue, &task, 1)
+            .await;
 
     let result =
         e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
@@ -154,8 +137,7 @@ async fn e2e_checkpoint_none_first_attempt() {
     );
 
     // Confirm via direct DB query
-    let cp =
-        e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
+    let cp = e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
     assert!(cp.is_none(), "checkpoint NULL in DB after completion");
 
     server.shutdown().await;
@@ -251,12 +233,10 @@ async fn e2e_checkpoint_large_payload() {
     let body: serde_json::Value = resp.json().await.expect("json");
     let task_id = body["id"].as_str().expect("task id").to_string();
 
-    let result =
-        e2e::wait_for_status(&client, &base_url, &task_id, "completed", TIMEOUT).await;
+    let result = e2e::wait_for_status(&client, &base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let cp =
-        e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
+    let cp = e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
     assert!(cp.is_none(), "checkpoint cleared after completion");
 
     server.shutdown().await;
@@ -485,12 +465,10 @@ async fn e2e_checkpoint_sweeper_recovery() {
     let body: serde_json::Value = resp.json().await.expect("json");
     let task_id = body["id"].as_str().expect("task id").to_string();
 
-    let result =
-        e2e::wait_for_status(&client, &base_url, &task_id, "completed", TIMEOUT).await;
+    let result = e2e::wait_for_status(&client, &base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let cp =
-        e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
+    let cp = e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
     assert!(cp.is_none(), "checkpoint cleared after completion");
 
     server.shutdown().await;
@@ -590,8 +568,7 @@ async fn e2e_checkpoint_with_audit_log() {
     let body: serde_json::Value = resp.json().await.expect("json");
     let task_id = body["id"].as_str().expect("task id").to_string();
 
-    let result =
-        e2e::wait_for_status(&client, &base_url, &task_id, "completed", TIMEOUT).await;
+    let result = e2e::wait_for_status(&client, &base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
     let task_uuid = uuid::Uuid::parse_str(&task_id).unwrap();
@@ -646,13 +623,14 @@ impl Task for LargeCheckpointTask {
                     source: "missing checkpoint on retry".into(),
                 },
             })?;
-        let data = cp.get("data")
-            .and_then(|d| d.as_str())
-            .ok_or_else(|| TaskError::ExecutionFailed {
-                kind: ExecutionErrorKind::HandlerFailed {
-                    source: "missing or invalid data field in checkpoint".into(),
-                },
-            })?;
+        let data =
+            cp.get("data")
+                .and_then(|d| d.as_str())
+                .ok_or_else(|| TaskError::ExecutionFailed {
+                    kind: ExecutionErrorKind::HandlerFailed {
+                        source: "missing or invalid data field in checkpoint".into(),
+                    },
+                })?;
         assert_eq!(data.len(), self.payload_size, "payload must survive intact");
         assert!(data.chars().all(|c| c == 'x'), "payload content corrupted");
 
@@ -715,13 +693,14 @@ impl Task for SweeperCheckpointTask {
                     source: "missing checkpoint after sweeper recovery".into(),
                 },
             })?;
-        let step = cp.get("step")
-            .and_then(|s| s.as_u64())
-            .ok_or_else(|| TaskError::ExecutionFailed {
-                kind: ExecutionErrorKind::HandlerFailed {
-                    source: "missing or invalid step field in checkpoint".into(),
-                },
-            })?;
+        let step =
+            cp.get("step")
+                .and_then(|s| s.as_u64())
+                .ok_or_else(|| TaskError::ExecutionFailed {
+                    kind: ExecutionErrorKind::HandlerFailed {
+                        source: "missing or invalid step field in checkpoint".into(),
+                    },
+                })?;
         assert_eq!(step, 2, "should resume from step 2 checkpoint");
 
         ctx.checkpoint(json!({"step": 3, "data": "step_3_result"}))

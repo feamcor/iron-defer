@@ -561,13 +561,11 @@ async fn cancel_suspended_task_returns_200() {
     let task_id = post_body["id"].as_str().expect("id");
 
     // Force transition to suspended via DB
-    sqlx::query(
-        "UPDATE tasks SET status = 'suspended' WHERE id = $1"
-    )
-    .bind(uuid::Uuid::parse_str(task_id).unwrap())
-    .execute(pool)
-    .await
-    .expect("update status to suspended");
+    sqlx::query("UPDATE tasks SET status = 'suspended' WHERE id = $1")
+        .bind(uuid::Uuid::parse_str(task_id).unwrap())
+        .execute(pool)
+        .await
+        .expect("update status to suspended");
 
     // Cancel
     let del_resp = reqwest::Client::new()
@@ -788,11 +786,11 @@ async fn cancel_running_task_returns_409() {
     let mut claimed = false;
     for _ in 0..30 {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        if let Some(r) = engine.find(task_id).await.expect("find") {
-            if r.status() == iron_defer::TaskStatus::Running {
-                claimed = true;
-                break;
-            }
+        if let Some(r) = engine.find(task_id).await.expect("find")
+            && r.status() == iron_defer::TaskStatus::Running
+        {
+            claimed = true;
+            break;
         }
     }
     assert!(claimed, "task should be claimed within 6 seconds");
@@ -854,11 +852,11 @@ async fn cancel_completed_task_returns_409() {
     let mut completed = false;
     for _ in 0..30 {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        if let Some(r) = engine.find(task_id).await.expect("find") {
-            if r.status() == iron_defer::TaskStatus::Completed {
-                completed = true;
-                break;
-            }
+        if let Some(r) = engine.find(task_id).await.expect("find")
+            && r.status() == iron_defer::TaskStatus::Completed
+        {
+            completed = true;
+            break;
         }
     }
     assert!(completed, "task should complete within 6 seconds");
@@ -1189,7 +1187,12 @@ async fn list_tasks_fails_unfiltered() {
 
     assert_eq!(resp.status(), 422);
     let body: serde_json::Value = resp.json().await.expect("json");
-    assert!(body["error"]["message"].as_str().unwrap().contains("please provide a 'queue' or 'status' filter"));
+    assert!(
+        body["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("please provide a 'queue' or 'status' filter")
+    );
 }
 
 #[tokio::test]

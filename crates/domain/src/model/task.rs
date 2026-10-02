@@ -488,7 +488,7 @@ impl TaskContext {
 /// Implementors define a stable `KIND` discriminator and the asynchronous
 /// execution body. Uses native `async fn` in trait — no `async-trait` proc
 /// macro is needed at the user-facing layer. (Native `async fn` in trait
-/// stabilized in Rust 1.75; iron-defer's MSRV of 1.94 is driven by other
+/// stabilized in Rust 1.75; iron-defer's MSRV of 1.99 is driven by other
 /// workspace dependencies, not this trait.) Type erasure for the registry
 /// happens behind a separate object-safe `TaskHandler` trait in the
 /// application layer.

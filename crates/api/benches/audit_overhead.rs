@@ -32,7 +32,7 @@ const OVERHEAD_THRESHOLD_PCT: f64 = 20.0;
 fn audit_overhead_benchmark(c: &mut Criterion) {
     let database_url = std::env::var("DATABASE_URL").expect(
         "DATABASE_URL is required for the audit overhead benchmark.\n\
-         Example: DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres"
+         Example: DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres",
     );
 
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -89,7 +89,7 @@ fn audit_overhead_benchmark(c: &mut Criterion) {
     let off_rate = BATCH_SIZE as f64 / off_dur.as_secs_f64();
     let on_rate = BATCH_SIZE as f64 / on_dur.as_secs_f64();
     let overhead_pct = ((off_rate - on_rate) / off_rate) * 100.0;
-    
+
     println!("\n=== Audit Log Overhead Report ===");
     println!("Batch size: {BATCH_SIZE}");
     println!("audit_log=false: {off_rate:.1} tasks/sec");
@@ -97,7 +97,11 @@ fn audit_overhead_benchmark(c: &mut Criterion) {
     println!("Overhead: {overhead_pct:.1}% (Target: <= {OVERHEAD_THRESHOLD_PCT}%)");
     println!(
         "Result: {}",
-        if overhead_pct <= OVERHEAD_THRESHOLD_PCT { "PASS" } else { "FAIL (Informational)" }
+        if overhead_pct <= OVERHEAD_THRESHOLD_PCT {
+            "PASS"
+        } else {
+            "FAIL (Informational)"
+        }
     );
     println!("==================================\n");
 }

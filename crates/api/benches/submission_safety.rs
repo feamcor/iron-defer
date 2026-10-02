@@ -23,9 +23,7 @@ impl Task for BenchTask {
     }
 }
 
-fn setup_pool_and_engine(
-    rt: &tokio::runtime::Runtime,
-) -> (sqlx::PgPool, IronDefer) {
+fn setup_pool_and_engine(rt: &tokio::runtime::Runtime) -> (sqlx::PgPool, IronDefer) {
     let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
         panic!(
             "DATABASE_URL is required for submission safety benchmarks.\n\
@@ -260,8 +258,7 @@ fn transactional_overhead(c: &mut Criterion) {
             let start = Instant::now();
             let mut tx = pool.begin().await.expect("begin");
             engine
-            .enqueue_in_tx(&mut tx, &queue, BenchTask, None)
-
+                .enqueue_in_tx(&mut tx, &queue, BenchTask, None)
                 .await
                 .expect("enqueue_in_tx");
             tx.commit().await.expect("commit");

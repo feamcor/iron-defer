@@ -62,14 +62,18 @@ pub async fn shutdown_signal() {
     }
 }
 
-/// Flush and shut down the global `OTel` tracer provider.
+/// Flush and shut down an `OTel` tracer provider.
 ///
-/// Ensures traces are flushed before exit.
-pub fn shutdown_tracer_provider() {
-    shutdown_observability(|| {
-        opentelemetry::global::shutdown_tracer_provider();
-        Ok::<(), String>(())
-    });
+/// Ensures traces are flushed before exit. Because `opentelemetry` 0.33
+/// removed the global `shutdown_tracer_provider()` helper, the provider
+/// handle returned by the tracing initializer must be passed in via the
+/// closure — mirroring [`shutdown_meter_provider`].
+pub fn shutdown_tracer_provider<F, E>(shutdown_fn: F)
+where
+    F: FnOnce() -> Result<(), E>,
+    E: std::fmt::Display,
+{
+    shutdown_observability(shutdown_fn);
 }
 
 /// Flush buffered `OTel` metric exports on process shutdown.

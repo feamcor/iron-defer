@@ -10,7 +10,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.94"
+rust-version = "1.99"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/feamcor/iron-defer"
 
@@ -31,19 +31,19 @@ serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 
 # Infrastructure
-sqlx = { version = "0.8", features = [
-    "runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "migrate"
+sqlx = { version = "0.9", features = [
+    "runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "migrate"
 ] }
 tokio = { version = "1" }
 axum = { version = "0.8" }
-reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.13", features = ["rustls"], default-features = false }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-opentelemetry = "0.27"
-opentelemetry_sdk = { version = "0.27", features = ["metrics", "trace", "rt-tokio"] }
-opentelemetry-otlp = { version = "0.27", features = ["metrics", "trace", "http-proto", "reqwest-client"] }
-opentelemetry-prometheus = "0.27"
-prometheus = "0.13"
+opentelemetry = "0.33"
+opentelemetry_sdk = { version = "0.33", features = ["metrics", "trace", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.33", features = ["metrics", "trace", "http-proto", "reqwest-client"] }
+opentelemetry-prometheus = "0.33"
+prometheus = "0.14"
 
 # Config
 figment = { version = "0.10", features = ["toml", "env"] }
@@ -59,22 +59,22 @@ async-trait = "0.1"
 # Utilities
 tokio-util = { version = "0.7", features = ["rt"] }
 humantime-serde = "1"
-rand = "0.9"
+rand = "0.10"
 
 # OpenAPI
-utoipa = { version = "5", features = ["chrono", "uuid"] }
+utoipa = { version = "6", features = ["chrono", "uuid"] }
 
 # tokio-console (dev diagnostics)
-console-subscriber = "0.4"
+console-subscriber = "0.5"
 
 # Benchmarks
-criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
+criterion = { version = "0.8", features = ["html_reports", "async_tokio"] }
 
 # Dev
-testcontainers = "0.23"
-testcontainers-modules = { version = "0.11", features = ["postgres"] }
-mockall = "0.13"
+testcontainers = "0.27"
+testcontainers-modules = { version = "0.15", features = ["postgres"] }
+mockall = "0.15"
 tracing-test = "0.2"
 assert_cmd = "2"
 regex = "1"
-serial_test = "3"
+serial_test = "4"

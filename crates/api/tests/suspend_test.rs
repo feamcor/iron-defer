@@ -124,10 +124,10 @@ async fn wait_for_status(
                 record.status()
             );
         }
-        if let Some(record) = engine.find(task_id).await.unwrap() {
-            if record.status() == target {
-                return record;
-            }
+        if let Some(record) = engine.find(task_id).await.unwrap()
+            && record.status() == target
+        {
+            return record;
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
@@ -156,7 +156,13 @@ async fn suspend_transitions_to_suspended() {
     let token_run = token.clone();
     tokio::spawn(async move { engine_run.start(token_run).await });
 
-    let suspended = wait_for_status(&engine, task_id, TaskStatus::Suspended, Duration::from_secs(10)).await;
+    let suspended = wait_for_status(
+        &engine,
+        task_id,
+        TaskStatus::Suspended,
+        Duration::from_secs(10),
+    )
+    .await;
     token.cancel();
 
     assert_eq!(suspended.status(), TaskStatus::Suspended);
@@ -186,7 +192,13 @@ async fn signal_resumes_suspended_task() {
     let token_run = token.clone();
     tokio::spawn(async move { engine_run.start(token_run).await });
 
-    wait_for_status(&engine, task_id, TaskStatus::Suspended, Duration::from_secs(10)).await;
+    wait_for_status(
+        &engine,
+        task_id,
+        TaskStatus::Suspended,
+        Duration::from_secs(10),
+    )
+    .await;
 
     let signal_payload = serde_json::json!({"approved": true, "reviewer": "alice"});
     let signaled = engine
@@ -197,7 +209,13 @@ async fn signal_resumes_suspended_task() {
     assert!(signaled.suspended_at().is_none());
     assert_eq!(signaled.signal_payload(), Some(&signal_payload));
 
-    let completed = wait_for_status(&engine, task_id, TaskStatus::Completed, Duration::from_secs(10)).await;
+    let completed = wait_for_status(
+        &engine,
+        task_id,
+        TaskStatus::Completed,
+        Duration::from_secs(10),
+    )
+    .await;
     token.cancel();
 
     assert_eq!(completed.status(), TaskStatus::Completed);
@@ -229,7 +247,13 @@ async fn concurrent_signals_exactly_one_wins() {
     let token_run = token.clone();
     tokio::spawn(async move { engine_run.start(token_run).await });
 
-    wait_for_status(&engine, task_id, TaskStatus::Suspended, Duration::from_secs(10)).await;
+    wait_for_status(
+        &engine,
+        task_id,
+        TaskStatus::Suspended,
+        Duration::from_secs(10),
+    )
+    .await;
 
     let barrier = Arc::new(tokio::sync::Barrier::new(10));
     let mut handles = Vec::new();
@@ -286,16 +310,25 @@ async fn suspend_watchdog_auto_fails() {
     let token_run = token.clone();
     tokio::spawn(async move { engine_run.start(token_run).await });
 
-    wait_for_status(&engine, task_id, TaskStatus::Suspended, Duration::from_secs(10)).await;
+    wait_for_status(
+        &engine,
+        task_id,
+        TaskStatus::Suspended,
+        Duration::from_secs(10),
+    )
+    .await;
 
-    let failed = wait_for_status(&engine, task_id, TaskStatus::Failed, Duration::from_secs(15)).await;
+    let failed = wait_for_status(
+        &engine,
+        task_id,
+        TaskStatus::Failed,
+        Duration::from_secs(15),
+    )
+    .await;
     token.cancel();
 
     assert_eq!(failed.status(), TaskStatus::Failed);
-    assert_eq!(
-        failed.last_error(),
-        Some("suspend timeout exceeded")
-    );
+    assert_eq!(failed.last_error(), Some("suspend timeout exceeded"));
 }
 
 #[tokio::test]
@@ -322,7 +355,13 @@ async fn suspended_task_not_counted_in_concurrency() {
     let token_run = token.clone();
     tokio::spawn(async move { engine_run.start(token_run).await });
 
-    wait_for_status(&engine, suspend_id, TaskStatus::Suspended, Duration::from_secs(10)).await;
+    wait_for_status(
+        &engine,
+        suspend_id,
+        TaskStatus::Suspended,
+        Duration::from_secs(10),
+    )
+    .await;
 
     let quick_record = engine
         .enqueue(&queue, QuickTask {})
@@ -330,7 +369,13 @@ async fn suspended_task_not_counted_in_concurrency() {
         .expect("enqueue quick");
     let quick_id = quick_record.id();
 
-    let completed = wait_for_status(&engine, quick_id, TaskStatus::Completed, Duration::from_secs(10)).await;
+    let completed = wait_for_status(
+        &engine,
+        quick_id,
+        TaskStatus::Completed,
+        Duration::from_secs(10),
+    )
+    .await;
     token.cancel();
 
     assert_eq!(completed.status(), TaskStatus::Completed);
@@ -346,12 +391,11 @@ async fn signal_on_non_suspended_returns_409() {
     let queue = common::unique_queue();
     let engine = build_engine(pool, &queue).await;
 
-    let record = engine
-        .enqueue(&queue, QuickTask {})
-        .await
-        .expect("enqueue");
+    let record = engine.enqueue(&queue, QuickTask {}).await.expect("enqueue");
 
-    let result = engine.signal(record.id(), Some(serde_json::json!({}))).await;
+    let result = engine
+        .signal(record.id(), Some(serde_json::json!({})))
+        .await;
     match result {
         Err(TaskError::NotInExpectedState { .. }) => {}
         other => panic!("expected NotInExpectedState, got {other:?}"),

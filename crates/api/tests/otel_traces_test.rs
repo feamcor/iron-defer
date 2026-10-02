@@ -3,13 +3,11 @@ mod common;
 use std::sync::Arc;
 use std::time::Duration;
 
-use iron_defer::{
-    IronDefer, Task, TaskContext, TaskError, WorkerConfig,
-};
+use iron_defer::{IronDefer, Task, TaskContext, TaskError, WorkerConfig};
 use opentelemetry::global;
 use opentelemetry::trace::TraceId;
-use opentelemetry_sdk::testing::trace::InMemorySpanExporter;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::InMemorySpanExporter;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use serde::{Deserialize, Serialize};
 use serial_test::serial;
 use tokio_util::sync::CancellationToken;
@@ -103,7 +101,11 @@ async fn trace_id_persisted_in_database() {
 
     assert_eq!(record.trace_id(), Some(trace_id.as_str()));
 
-    let found = engine.find(record.id()).await.expect("find").expect("exists");
+    let found = engine
+        .find(record.id())
+        .await
+        .expect("find")
+        .expect("exists");
     assert_eq!(found.trace_id(), Some(trace_id.as_str()));
 }
 
@@ -118,7 +120,16 @@ async fn no_trace_id_when_not_provided() {
     let engine = build_engine(pool.clone(), &queue).await;
 
     let record = engine
-        .enqueue_raw(&queue, "trace_echo", serde_json::json!({}), None, None, None, None, None)
+        .enqueue_raw(
+            &queue,
+            "trace_echo",
+            serde_json::json!({}),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
         .await
         .expect("enqueue without trace_id");
 
@@ -134,10 +145,10 @@ async fn span_created_with_correct_trace_id_and_attributes() {
     };
 
     let exporter = InMemorySpanExporter::default();
-    let provider = TracerProvider::builder()
+    let provider = SdkTracerProvider::builder()
         .with_simple_exporter(exporter.clone())
         .build();
-    let _prev = global::set_tracer_provider(provider.clone());
+    global::set_tracer_provider(provider.clone());
 
     let queue = common::unique_queue();
     let engine = build_engine(pool.clone(), &queue).await;
@@ -172,7 +183,7 @@ async fn span_created_with_correct_trace_id_and_attributes() {
         .expect("worker exit")
         .expect("worker ok");
 
-    provider.force_flush();
+    provider.force_flush().expect("force flush");
     let spans = exporter.get_finished_spans().expect("get spans");
 
     let exec_span = spans
@@ -193,7 +204,8 @@ async fn span_created_with_correct_trace_id_and_attributes() {
     assert_eq!(attrs.get("kind").map(String::as_str), Some("trace_echo"));
     assert!(attrs.contains_key("attempt"), "missing attempt attr");
 
-    let transition_events: Vec<_> = exec_span.events
+    let transition_events: Vec<_> = exec_span
+        .events
         .iter()
         .filter(|e| e.name == "task.state_transition")
         .collect();
@@ -213,16 +225,25 @@ async fn no_span_created_without_trace_id() {
     };
 
     let exporter = InMemorySpanExporter::default();
-    let provider = TracerProvider::builder()
+    let provider = SdkTracerProvider::builder()
         .with_simple_exporter(exporter.clone())
         .build();
-    let _prev = global::set_tracer_provider(provider.clone());
+    global::set_tracer_provider(provider.clone());
 
     let queue = common::unique_queue();
     let engine = build_engine(pool.clone(), &queue).await;
 
     engine
-        .enqueue_raw(&queue, "trace_echo", serde_json::json!({}), None, None, None, None, None)
+        .enqueue_raw(
+            &queue,
+            "trace_echo",
+            serde_json::json!({}),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
         .await
         .expect("enqueue");
 
@@ -240,7 +261,7 @@ async fn no_span_created_without_trace_id() {
         .expect("worker exit")
         .expect("worker ok");
 
-    provider.force_flush();
+    provider.force_flush().expect("force flush");
     let spans = exporter.get_finished_spans().expect("get spans");
 
     let exec_spans: Vec<_> = spans
@@ -263,10 +284,10 @@ async fn retry_spans_share_same_trace_id() {
     };
 
     let exporter = InMemorySpanExporter::default();
-    let provider = TracerProvider::builder()
+    let provider = SdkTracerProvider::builder()
         .with_simple_exporter(exporter.clone())
         .build();
-    let _prev = global::set_tracer_provider(provider.clone());
+    global::set_tracer_provider(provider.clone());
 
     let queue = common::unique_queue();
 
@@ -319,7 +340,7 @@ async fn retry_spans_share_same_trace_id() {
         .expect("worker exit")
         .expect("worker ok");
 
-    provider.force_flush();
+    provider.force_flush().expect("force flush");
     let spans = exporter.get_finished_spans().expect("get spans");
 
     let exec_spans: Vec<_> = spans

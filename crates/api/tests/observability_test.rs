@@ -114,8 +114,10 @@ async fn payload_privacy_task_enqueued_shows_payload_when_opted_in() {
     let secret = format!("ENQ_SHOW_{}", uuid::Uuid::new_v4());
     let queue = common::unique_queue();
 
-    let mut config = WorkerConfig::default();
-    config.log_payload = true;
+    let config = WorkerConfig {
+        log_payload: true,
+        ..WorkerConfig::default()
+    };
 
     let engine = IronDefer::builder()
         .pool(pool.clone())

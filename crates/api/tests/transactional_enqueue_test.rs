@@ -134,22 +134,20 @@ async fn enqueue_in_rolled_back_tx_invisible() {
     tx.rollback().await.expect("rollback");
 
     // Verify zero tasks exist for this queue
-    let (count,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE queue = $1")
-            .bind(&queue)
-            .fetch_one(&pool)
-            .await
-            .expect("count");
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE queue = $1")
+        .bind(&queue)
+        .fetch_one(&pool)
+        .await
+        .expect("count");
     assert_eq!(count, 0, "rolled-back tx must leave zero tasks");
 
     // Brief wait + re-check to confirm no worker claimed during the window
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-    let (count2,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE queue = $1")
-            .bind(&queue)
-            .fetch_one(&pool)
-            .await
-            .expect("count2");
+    let (count2,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE queue = $1")
+        .bind(&queue)
+        .fetch_one(&pool)
+        .await
+        .expect("count2");
     assert_eq!(count2, 0, "zero tasks after brief wait (no phantom claims)");
 }
 
@@ -214,14 +212,13 @@ async fn enqueue_idempotent_in_tx_mvcc_isolation() {
     tx_b.commit().await.expect("commit tx_b");
 
     // Verify exactly 1 task in DB
-    let (count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM tasks WHERE queue = $1 AND idempotency_key = $2",
-    )
-    .bind(&queue)
-    .bind(&key)
-    .fetch_one(&pool)
-    .await
-    .expect("count");
+    let (count,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE queue = $1 AND idempotency_key = $2")
+            .bind(&queue)
+            .bind(&key)
+            .fetch_one(&pool)
+            .await
+            .expect("count");
     assert_eq!(count, 1, "exactly 1 task with this idempotency key");
 }
 
@@ -242,10 +239,9 @@ async fn worker_sees_zero_tasks_during_uncommitted_window() {
         .register::<TxTask>()
         .queue(&queue)
         .skip_migrations(true)
-        .worker_config({
-            let mut wc = iron_defer::WorkerConfig::default();
-            wc.poll_interval = std::time::Duration::from_millis(50);
-            wc
+        .worker_config(iron_defer::WorkerConfig {
+            poll_interval: std::time::Duration::from_millis(50),
+            ..iron_defer::WorkerConfig::default()
         })
         .build()
         .await

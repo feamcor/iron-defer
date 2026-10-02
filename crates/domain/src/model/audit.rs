@@ -17,7 +17,6 @@ pub struct AuditLogEntry {
 }
 
 impl AuditLogEntry {
-
     #[must_use]
     pub fn id(&self) -> i64 {
         self.id

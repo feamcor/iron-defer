@@ -110,9 +110,7 @@ impl TryFrom<&str> for TablePersistence {
             "p" => Ok(Self::Permanent),
             "u" => Ok(Self::Unlogged),
             "t" => Ok(Self::Temporary),
-            other => Err(format!(
-                "unknown pg_class.relpersistence value: {other:?}"
-            )),
+            other => Err(format!("unknown pg_class.relpersistence value: {other:?}")),
         }
     }
 }
@@ -130,9 +128,9 @@ pub use iron_defer_application::{
     DatabaseConfig, Metrics, TaskHandler, TaskRegistry, WorkerConfig,
 };
 pub use iron_defer_domain::{
-    CancelResult, ExecutionErrorKind, ListTasksFilter, ListTasksResult, PayloadErrorKind,
-    QueueName, QueueStatistics, Task, TaskContext, TaskError, TaskId, TaskRecord, TaskStatus,
-    WorkerStatus, IDEMPOTENCY_KEY_MAX_LEN, REGION_MAX_LEN,
+    CancelResult, ExecutionErrorKind, IDEMPOTENCY_KEY_MAX_LEN, ListTasksFilter, ListTasksResult,
+    PayloadErrorKind, QueueName, QueueStatistics, REGION_MAX_LEN, Task, TaskContext, TaskError,
+    TaskId, TaskRecord, TaskStatus, WorkerStatus,
 };
 pub use iron_defer_infrastructure::create_metrics;
 pub use tokio_util::sync::CancellationToken;
@@ -503,14 +501,14 @@ impl IronDefer {
         task: T,
         region: Option<&str>,
     ) -> Result<TaskRecord, TaskError> {
-        if let Some(r) = region {
-            if r.is_empty() {
-                return Err(TaskError::InvalidPayload {
-                    kind: PayloadErrorKind::Validation {
-                        message: "region label must not be empty".to_owned(),
-                    },
-                });
-            }
+        if let Some(r) = region
+            && r.is_empty()
+        {
+            return Err(TaskError::InvalidPayload {
+                kind: PayloadErrorKind::Validation {
+                    message: "region label must not be empty".to_owned(),
+                },
+            });
         }
         if self.registry.get(T::KIND).is_none() {
             return Err(TaskError::InvalidPayload {
@@ -561,14 +559,14 @@ impl IronDefer {
         region: Option<&str>,
     ) -> Result<(TaskRecord, bool), TaskError> {
         validate_idempotency_key(idempotency_key)?;
-        if let Some(r) = region {
-            if r.is_empty() {
-                return Err(TaskError::InvalidPayload {
-                    kind: PayloadErrorKind::Validation {
-                        message: "region label must not be empty".to_owned(),
-                    },
-                });
-            }
+        if let Some(r) = region
+            && r.is_empty()
+        {
+            return Err(TaskError::InvalidPayload {
+                kind: PayloadErrorKind::Validation {
+                    message: "region label must not be empty".to_owned(),
+                },
+            });
         }
         if self.registry.get(T::KIND).is_none() {
             return Err(TaskError::InvalidPayload {
@@ -827,9 +825,7 @@ impl IronDefer {
             sweeper_token,
         )
         .with_suspend_timeout(self.worker_config.suspend_timeout)
-        .with_saturation_classifier(Arc::new(
-            iron_defer_infrastructure::is_pool_timeout,
-        ));
+        .with_saturation_classifier(Arc::new(iron_defer_infrastructure::is_pool_timeout));
         if let Some(ref m) = self.metrics {
             sweeper = sweeper.with_metrics(m.clone());
         }
@@ -841,10 +837,9 @@ impl IronDefer {
         });
 
         let worker_id = iron_defer_domain::WorkerId::new();
-        let checkpoint_writer: Arc<dyn iron_defer_domain::CheckpointWriter> =
-            Arc::new(iron_defer_infrastructure::PostgresCheckpointWriter::new(
-                self.pool.clone(),
-            ));
+        let checkpoint_writer: Arc<dyn iron_defer_domain::CheckpointWriter> = Arc::new(
+            iron_defer_infrastructure::PostgresCheckpointWriter::new(self.pool.clone()),
+        );
         let worker = WorkerService::builder()
             .repo(repo.clone())
             .registry(self.registry.clone())
@@ -852,9 +847,7 @@ impl IronDefer {
             .queue(self.queue.clone())
             .token(worker_token)
             .worker_id(worker_id)
-            .is_saturation(Arc::new(
-                iron_defer_infrastructure::is_pool_timeout,
-            ))
+            .is_saturation(Arc::new(iron_defer_infrastructure::is_pool_timeout))
             .maybe_metrics(self.metrics.clone())
             .checkpoint_writer(checkpoint_writer)
             .build();
@@ -1516,11 +1509,8 @@ impl IronDeferBuilder {
             return Ok(());
         };
 
-        let persistence = TablePersistence::try_from(persistence.as_str()).map_err(|msg| {
-            TaskError::Storage {
-                source: msg.into(),
-            }
-        })?;
+        let persistence = TablePersistence::try_from(persistence.as_str())
+            .map_err(|msg| TaskError::Storage { source: msg.into() })?;
         let is_unlogged = persistence.is_unlogged();
 
         if want_unlogged && !is_unlogged {
@@ -1586,9 +1576,10 @@ impl IronDeferBuilder {
 
         // Drop FK before conversion (required for UNLOGGED).
         if let Some(ref name) = fk_name {
-            sqlx::query(&format!(
+            // `name` comes from `pg_constraint.conname`, not user input. Audited safe.
+            sqlx::query(sqlx::AssertSqlSafe(format!(
                 "ALTER TABLE task_audit_log DROP CONSTRAINT IF EXISTS {name}"
-            ))
+            )))
             .execute(pool)
             .await
             .map_err(|e| TaskError::Storage {
@@ -1596,39 +1587,44 @@ impl IronDeferBuilder {
             })?;
         }
 
-        sqlx::query(&format!("ALTER TABLE tasks SET {keyword}"))
-            .execute(pool)
-            .await
-            .map_err(|e| TaskError::Storage {
-                source: format!("ALTER TABLE tasks SET {keyword} failed: {e}").into(),
-            })?;
+        // `keyword` is one of a fixed set of PostgreSQL persistence keywords
+        // produced by `TablePersistence::alter_table_keyword`. Audited safe.
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "ALTER TABLE tasks SET {keyword}"
+        )))
+        .execute(pool)
+        .await
+        .map_err(|e| TaskError::Storage {
+            source: format!("ALTER TABLE tasks SET {keyword} failed: {e}").into(),
+        })?;
 
         // Restore FK only when converting back to permanent (both tables are
         // now permanent, so the FK is valid).
-        if target == TablePersistence::Permanent {
-            if let Some(ref name) = fk_name {
-                // Delete orphaned audit rows before restoring the FK. This can
-                // happen after a Postgres crash in UNLOGGED mode.
-                sqlx::query(
-                    "DELETE FROM task_audit_log WHERE NOT EXISTS \
-                     (SELECT 1 FROM tasks WHERE tasks.id = task_audit_log.task_id)",
-                )
-                .execute(pool)
-                .await
-                .map_err(|e| TaskError::Storage {
-                    source: format!("failed to clear orphaned audit logs: {e}").into(),
-                })?;
+        if target == TablePersistence::Permanent
+            && let Some(ref name) = fk_name
+        {
+            // Delete orphaned audit rows before restoring the FK. This can
+            // happen after a Postgres crash in UNLOGGED mode.
+            sqlx::query(
+                "DELETE FROM task_audit_log WHERE NOT EXISTS \
+                 (SELECT 1 FROM tasks WHERE tasks.id = task_audit_log.task_id)",
+            )
+            .execute(pool)
+            .await
+            .map_err(|e| TaskError::Storage {
+                source: format!("failed to clear orphaned audit logs: {e}").into(),
+            })?;
 
-                sqlx::query(&format!(
-                    "ALTER TABLE task_audit_log ADD CONSTRAINT {name} \
-                     FOREIGN KEY (task_id) REFERENCES tasks(id)"
-                ))
-                .execute(pool)
-                .await
-                .map_err(|e| TaskError::Storage {
-                    source: format!("failed to restore FK constraint: {e}").into(),
-                })?;
-            }
+            // `name` comes from `pg_constraint.conname`, not user input. Audited safe.
+            sqlx::query(sqlx::AssertSqlSafe(format!(
+                "ALTER TABLE task_audit_log ADD CONSTRAINT {name} \
+                 FOREIGN KEY (task_id) REFERENCES tasks(id)"
+            )))
+            .execute(pool)
+            .await
+            .map_err(|e| TaskError::Storage {
+                source: format!("failed to restore FK constraint: {e}").into(),
+            })?;
         }
 
         Ok(())
@@ -1729,15 +1725,27 @@ mod tests {
 
     #[test]
     fn table_persistence_try_from_accepts_known_codes() {
-        assert_eq!(TablePersistence::try_from("p"), Ok(TablePersistence::Permanent));
-        assert_eq!(TablePersistence::try_from("u"), Ok(TablePersistence::Unlogged));
-        assert_eq!(TablePersistence::try_from("t"), Ok(TablePersistence::Temporary));
+        assert_eq!(
+            TablePersistence::try_from("p"),
+            Ok(TablePersistence::Permanent)
+        );
+        assert_eq!(
+            TablePersistence::try_from("u"),
+            Ok(TablePersistence::Unlogged)
+        );
+        assert_eq!(
+            TablePersistence::try_from("t"),
+            Ok(TablePersistence::Temporary)
+        );
     }
 
     #[test]
     fn table_persistence_try_from_rejects_unknown_code() {
         let err = TablePersistence::try_from("x").unwrap_err();
-        assert!(err.contains("unknown pg_class.relpersistence value"), "{err}");
+        assert!(
+            err.contains("unknown pg_class.relpersistence value"),
+            "{err}"
+        );
     }
 
     #[test]
@@ -1749,8 +1757,14 @@ mod tests {
 
     #[test]
     fn table_persistence_alter_table_keyword() {
-        assert_eq!(TablePersistence::Permanent.alter_table_keyword(), Some("LOGGED"));
-        assert_eq!(TablePersistence::Unlogged.alter_table_keyword(), Some("UNLOGGED"));
+        assert_eq!(
+            TablePersistence::Permanent.alter_table_keyword(),
+            Some("LOGGED")
+        );
+        assert_eq!(
+            TablePersistence::Unlogged.alter_table_keyword(),
+            Some("UNLOGGED")
+        );
         assert_eq!(TablePersistence::Temporary.alter_table_keyword(), None);
     }
 }

@@ -147,7 +147,10 @@ async fn e2e_cli_list_matches_rest() {
     assert_eq!(cli_task["queue"].as_str(), rest_task["queue"].as_str());
     assert_eq!(cli_task["kind"].as_str(), rest_task["kind"].as_str());
     assert_eq!(cli_task["status"].as_str(), rest_task["status"].as_str());
-    assert_eq!(cli_task["priority"].as_i64(), rest_task["priority"].as_i64());
+    assert_eq!(
+        cli_task["priority"].as_i64(),
+        rest_task["priority"].as_i64()
+    );
 
     server.shutdown().await;
 }

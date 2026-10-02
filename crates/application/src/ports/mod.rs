@@ -5,4 +5,6 @@ pub mod task_executor;
 pub mod task_repository;
 
 pub use task_executor::TaskExecutor;
-pub use task_repository::{RecoveryOutcome, TaskRepository, TransactionalTaskRepository};
+pub use task_repository::{
+    RecoveredTask, RecoveryOutcome, TaskRepository, TransactionalTaskRepository,
+};

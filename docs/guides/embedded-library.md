@@ -4,7 +4,7 @@ Use iron-defer as a library inside your existing Tokio application. The engine r
 
 ## Prerequisites
 
-- Rust 1.94+
+- Rust 1.99+
 - A running PostgreSQL instance
 - `iron-defer` added as a dependency (path or git)
 

@@ -27,7 +27,7 @@ use iron_defer_application::ObservabilityConfig;
 use iron_defer_domain::TaskError;
 use opentelemetry::global;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use tracing_subscriber::{
     EnvFilter, Layer, Registry, fmt, layer::SubscriberExt, registry::LookupSpan,
     util::SubscriberInitExt,
@@ -84,6 +84,14 @@ where
 /// The [`ObservabilityConfig`] reference allows this initializer to control
 /// OTLP wiring without changing the public function signature.
 ///
+/// # Returns
+///
+/// On success, the installed [`SdkTracerProvider`] is returned so the
+/// caller can flush buffered spans on shutdown via
+/// [`SdkTracerProvider::shutdown`]. `opentelemetry` 0.33 removed the
+/// global `shutdown_tracer_provider()` helper, so the owner of the
+/// provider is responsible for shutting it down.
+///
 /// # Errors
 ///
 /// Returns [`TaskError::Storage`] wrapping the `tracing-subscriber`
@@ -91,7 +99,7 @@ where
 /// can happen in tests that re-enter the function or in embedded mode
 /// where the caller has already wired their own subscriber — in both
 /// cases a panic would be the wrong response.
-pub fn init_tracing(config: &ObservabilityConfig) -> Result<(), TaskError> {
+pub fn init_tracing(config: &ObservabilityConfig) -> Result<SdkTracerProvider, TaskError> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     let filter_directive = env_filter.to_string();
 
@@ -104,7 +112,9 @@ pub fn init_tracing(config: &ObservabilityConfig) -> Result<(), TaskError> {
         source: Box::new(e),
     })?;
 
-    if !config.otlp_endpoint.is_empty() {
+    let tracer_provider = if config.otlp_endpoint.is_empty() {
+        SdkTracerProvider::builder().build()
+    } else {
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_http()
             .with_endpoint(&config.otlp_endpoint)
@@ -112,14 +122,13 @@ pub fn init_tracing(config: &ObservabilityConfig) -> Result<(), TaskError> {
             .map_err(|e| TaskError::Storage {
                 source: Box::new(e),
             })?;
-        let tracer_provider = TracerProvider::builder()
-            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
-            .build();
-        global::set_tracer_provider(tracer_provider);
-    } else {
-        let tracer_provider = TracerProvider::builder().build();
-        global::set_tracer_provider(tracer_provider);
-    }
+        SdkTracerProvider::builder()
+            .with_batch_exporter(exporter)
+            .build()
+    };
+    // `set_tracer_provider` takes ownership; keep a clone so the caller can
+    // call `shutdown()` on process exit.
+    global::set_tracer_provider(tracer_provider.clone());
 
     tracing::info!(
         filter = %filter_directive,
@@ -128,7 +137,7 @@ pub fn init_tracing(config: &ObservabilityConfig) -> Result<(), TaskError> {
         otlp_traces = !config.otlp_endpoint.is_empty(),
         "tracing subscriber initialized"
     );
-    Ok(())
+    Ok(tracer_provider)
 }
 
 /// Redact the password segment of a libpq-style connection URL.

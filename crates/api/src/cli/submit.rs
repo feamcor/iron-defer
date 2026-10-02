@@ -87,8 +87,9 @@ pub async fn run(submit: &Submit, database_url: &str, json: bool) -> Result<(), 
         None
     };
 
-    let repo = std::sync::Arc::new(iron_defer_infrastructure::PostgresTaskRepository::new(pool, false))
-        as std::sync::Arc<dyn iron_defer_application::TaskRepository>;
+    let repo = std::sync::Arc::new(iron_defer_infrastructure::PostgresTaskRepository::new(
+        pool, false,
+    )) as std::sync::Arc<dyn iron_defer_application::TaskRepository>;
 
     let scheduler = iron_defer_application::SchedulerService::new(repo);
 

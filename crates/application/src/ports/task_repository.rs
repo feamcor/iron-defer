@@ -2,15 +2,20 @@
 //!
 //! Object-safe so it can be injected as `Arc<dyn TaskRepository>`. Uses
 //! `async-trait` because native `async fn` in traits is not yet object-safe
-//! at MSRV 1.94.
+//! at MSRV 1.99.
 
 use std::time::Duration;
 
 use async_trait::async_trait;
 use iron_defer_domain::{
-    CancelResult, ListAuditLogResult, ListTasksFilter, ListTasksResult, QueueName,
-    QueueStatistics, TaskError, TaskId, TaskKind, TaskRecord, WorkerId, WorkerStatus,
+    CancelResult, ListAuditLogResult, ListTasksFilter, ListTasksResult, QueueName, QueueStatistics,
+    TaskError, TaskId, TaskKind, TaskRecord, WorkerId, WorkerStatus,
 };
+
+/// Summary of a task recovered (or failed) by the zombie sweeper.
+///
+/// Fields: `(task id, queue, kind, trace id, recovery outcome)`.
+pub type RecoveredTask = (TaskId, QueueName, TaskKind, Option<String>, RecoveryOutcome);
 
 /// Persistence port for task records.
 ///
@@ -86,12 +91,9 @@ pub trait TaskRepository: Send + Sync + 'static {
     /// `claimed_by` and `claimed_until` cleared and `scheduled_at` set to now.
     /// Exhausted tasks (`attempts >= max_attempts`) transition to `Failed`.
     ///
-    /// Returns `(TaskId, QueueName, TaskKind, Option<String>, RecoveryOutcome)`
-    /// tuples for all recovered and failed tasks so the caller has context
-    /// for metrics/logging/observability.
-    async fn recover_zombie_tasks(
-        &self,
-    ) -> Result<Vec<(TaskId, QueueName, TaskKind, Option<String>, RecoveryOutcome)>, TaskError>;
+    /// Returns [`RecoveredTask`] tuples for all recovered and failed tasks so
+    /// the caller has context for metrics/logging/observability.
+    async fn recover_zombie_tasks(&self) -> Result<Vec<RecoveredTask>, TaskError>;
 
     /// List tasks with optional filters and pagination.
     async fn list_tasks(&self, filter: &ListTasksFilter) -> Result<ListTasksResult, TaskError>;

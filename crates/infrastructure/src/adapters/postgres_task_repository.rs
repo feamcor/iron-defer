@@ -16,7 +16,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use iron_defer_application::{RecoveryOutcome, TaskRepository, TransactionalTaskRepository};
+use iron_defer_application::{
+    RecoveredTask, RecoveryOutcome, TaskRepository, TransactionalTaskRepository,
+};
 use iron_defer_domain::{
     AttemptCount, AuditLogEntry, CancelResult, ListTasksFilter, ListTasksResult, MaxAttempts,
     Priority, QueueName, QueueStatistics, TaskError, TaskId, TaskKind, TaskRecord, TaskStatus,
@@ -42,7 +44,7 @@ fn truncate_last_error(mut s: String) -> String {
         return s;
     }
     // `str::floor_char_boundary` is stable since Rust 1.86 (`round_char_boundary`
-    // feature stabilization); iron-defer's MSRV 1.94 is comfortably above.
+    // feature stabilization); iron-defer's MSRV 1.99 is comfortably above.
     let cutoff = s.floor_char_boundary(LAST_ERROR_MAX_BYTES);
     s.truncate(cutoff);
     s
@@ -315,6 +317,7 @@ impl PostgresTaskRepository {
     }
 
     #[instrument(skip(self, tx, metadata), err)]
+    #[allow(clippy::too_many_arguments)]
     async fn insert_audit_row(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -334,16 +337,16 @@ impl PostgresTaskRepository {
         let capped_trace_id = trace_id.map(|t| if t.len() > 255 { &t[..255] } else { t });
 
         // Cap metadata size to prevent database bloat (e.g., 10 KB)
-        let capped_metadata = metadata.and_then(|m| {
+        let capped_metadata = metadata.map(|m| {
             let s = serde_json::to_string(&m).unwrap_or_default();
             if s.len() > 10240 {
                 // If too large, record a truncation warning instead of the full payload
-                Some(serde_json::json!({
+                serde_json::json!({
                     "warning": "metadata truncated: exceeded 10KB limit",
                     "original_size": s.len()
-                }))
+                })
             } else {
-                Some(m)
+                m
             }
         });
 
@@ -613,7 +616,9 @@ impl TaskRepository for PostgresTaskRepository {
              WHERE queue = $1 \
              ORDER BY created_at ASC, id ASC"
         );
-        let rows = sqlx::query_as::<_, TaskRow>(&sql)
+        // `sql` is assembled only from the static `TASK_COLUMNS` constant and
+        // literals; `queue` is passed as a bind parameter. Audited safe.
+        let rows = sqlx::query_as::<_, TaskRow>(sqlx::AssertSqlSafe(sql.as_str()))
             .bind(queue.as_str())
             .fetch_all(&self.pool)
             .await
@@ -863,10 +868,7 @@ impl TaskRepository for PostgresTaskRepository {
     }
 
     #[instrument(skip(self), err)]
-    async fn recover_zombie_tasks(
-        &self,
-    ) -> Result<Vec<(TaskId, QueueName, TaskKind, Option<String>, RecoveryOutcome)>, TaskError>
-    {
+    async fn recover_zombie_tasks(&self) -> Result<Vec<RecoveredTask>, TaskError> {
         let mut tx = self
             .pool
             .begin()
@@ -1013,7 +1015,9 @@ impl TaskRepository for PostgresTaskRepository {
              LIMIT ${limit_idx} OFFSET ${offset_idx}"
         );
 
-        let mut query = sqlx::query_as::<_, TaskRowWithCount>(&sql);
+        // `where_sql` is built from static clauses only; filter values are
+        // bound separately. Audited safe.
+        let mut query = sqlx::query_as::<_, TaskRowWithCount>(sqlx::AssertSqlSafe(sql.as_str()));
         if let Some(ref queue) = filter.queue {
             query = query.bind(queue.as_str());
         }
@@ -1037,7 +1041,8 @@ impl TaskRepository for PostgresTaskRepository {
             // total_count is not available. Run a dedicated count query to
             // ensure pagination metadata remains correct.
             let count_sql = format!("SELECT COUNT(*) FROM tasks {where_sql}");
-            let mut count_query = sqlx::query_scalar::<_, i64>(&count_sql);
+            let mut count_query =
+                sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(count_sql.as_str()));
             if let Some(ref queue) = filter.queue {
                 count_query = count_query.bind(queue.as_str());
             }
@@ -1100,7 +1105,7 @@ impl TaskRepository for PostgresTaskRepository {
                 .to_string()
         };
 
-        let rows: Vec<QueueStatsRow> = sqlx::query_as(&sql)
+        let rows: Vec<QueueStatsRow> = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str()))
             .fetch_all(&self.pool)
             .await
             .map_err(PostgresAdapterError::from)?;

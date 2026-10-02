@@ -82,11 +82,11 @@ async fn e2e_pinned_task_correct_region() {
     let mut completed = false;
     for _ in 0..60 {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        if let Some(r) = engine_eu.find(task_id).await.unwrap() {
-            if r.status() == TaskStatus::Completed {
-                completed = true;
-                break;
-            }
+        if let Some(r) = engine_eu.find(task_id).await.unwrap()
+            && r.status() == TaskStatus::Completed
+        {
+            completed = true;
+            break;
         }
     }
 
@@ -138,11 +138,11 @@ async fn e2e_unpinned_claimed_by_any() {
     let mut completed = false;
     for _ in 0..60 {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        if let Some(r) = engine_eu.find(task_id).await.unwrap() {
-            if r.status() == TaskStatus::Completed {
-                completed = true;
-                break;
-            }
+        if let Some(r) = engine_eu.find(task_id).await.unwrap()
+            && r.status() == TaskStatus::Completed
+        {
+            completed = true;
+            break;
         }
     }
 
@@ -151,7 +151,10 @@ async fn e2e_unpinned_claimed_by_any() {
     let _ = eu_handle.await;
     let _ = us_handle.await;
 
-    assert!(completed, "unpinned task should be claimed by any regional worker");
+    assert!(
+        completed,
+        "unpinned task should be claimed by any regional worker"
+    );
 }
 
 #[tokio::test]
@@ -182,7 +185,11 @@ async fn e2e_regionless_worker_skips_pinned() {
     for _ in 0..10 {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let r = engine_none.find(task_id).await.unwrap().unwrap();
-        assert_eq!(r.status(), TaskStatus::Pending, "regionless worker should skip pinned task");
+        assert_eq!(
+            r.status(),
+            TaskStatus::Pending,
+            "regionless worker should skip pinned task"
+        );
     }
 
     // Now start a regional worker to claim it
@@ -200,11 +207,11 @@ async fn e2e_regionless_worker_skips_pinned() {
     let mut completed = false;
     for _ in 0..60 {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        if let Some(r) = engine_eu.find(task_id).await.unwrap() {
-            if r.status() == TaskStatus::Completed {
-                completed = true;
-                break;
-            }
+        if let Some(r) = engine_eu.find(task_id).await.unwrap()
+            && r.status() == TaskStatus::Completed
+        {
+            completed = true;
+            break;
         }
     }
     cancel2.cancel();
@@ -256,7 +263,10 @@ async fn e2e_regional_worker_claims_both() {
     }
     cancel.cancel();
     let _ = handle.await;
-    assert!(both_done, "eu-west worker should claim both pinned eu-west and unpinned tasks");
+    assert!(
+        both_done,
+        "eu-west worker should claim both pinned eu-west and unpinned tasks"
+    );
 }
 
 #[tokio::test]
@@ -270,7 +280,9 @@ async fn e2e_region_visible_in_rest() {
     let engine = build_regional_engine(&pool, &queue, None).await;
     let engine = Arc::new(engine);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.expect("bind");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:0")
+        .await
+        .expect("bind");
     let addr = listener.local_addr().expect("local_addr");
     let base_url = format!("http://127.0.0.1:{}", addr.port());
 

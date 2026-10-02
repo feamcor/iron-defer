@@ -132,7 +132,7 @@ When changing a subsystem, consult the relevant ADR or guideline before making n
 ## Rust Edition & MSRV
 
 - Edition: 2024
-- MSRV: 1.94
+- MSRV: 1.99
 - Formatter: `rustfmt.toml` sets `edition = "2024"`, `max_width = 100`
 
 ## Commit conventions
