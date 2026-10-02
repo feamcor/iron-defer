@@ -73,7 +73,7 @@ cargo sqlx prepare --workspace
 After **every** `cargo test` invocation (whether it passes, fails, or is interrupted), you MUST clean up Docker containers spawned by testcontainers:
 
 ```bash
-docker ps -aq --filter "label=org.testcontainers=true" | xargs -r docker rm -f 2>/dev/null; docker ps -aq --filter "ancestor=postgres:11-alpine" | xargs -r docker rm -f 2>/dev/null
+docker ps -aq --filter "label=org.testcontainers.managed-by=testcontainers" | xargs -r docker rm -f -v 2>/dev/null; docker ps -aq --filter "ancestor=postgres:18-alpine" | xargs -r docker rm -f -v 2>/dev/null
 ```
 
 This applies to ALL test commands: single-package tests, workspace-wide tests, integration tests, chaos tests, and any ad-hoc `cargo test` variant. No exceptions.
@@ -132,7 +132,7 @@ When changing a subsystem, consult the relevant ADR or guideline before making n
 ## Rust Edition & MSRV
 
 - Edition: 2024
-- MSRV: 1.94
+- MSRV: 1.99
 - Formatter: `rustfmt.toml` sets `edition = "2024"`, `max_width = 100`
 
 ## Commit conventions

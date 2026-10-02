@@ -93,14 +93,12 @@ fn checkpoint_latency_benchmark(c: &mut Criterion) {
             for _ in 0..SAMPLE_COUNT {
                 let task_id = insert_running_task(&pool).await;
                 let start = Instant::now();
-                sqlx::query(
-                    "UPDATE tasks SET checkpoint = $1, updated_at = now() WHERE id = $2",
-                )
-                .bind(&payload)
-                .bind(task_id)
-                .execute(&pool)
-                .await
-                .expect("checkpoint write");
+                sqlx::query("UPDATE tasks SET checkpoint = $1, updated_at = now() WHERE id = $2")
+                    .bind(&payload)
+                    .bind(task_id)
+                    .execute(&pool)
+                    .await
+                    .expect("checkpoint write");
                 latencies.push(start.elapsed());
                 cleanup_task(&pool, task_id).await;
             }
@@ -121,9 +119,7 @@ fn checkpoint_latency_benchmark(c: &mut Criterion) {
         );
     }
 
-    println!(
-        "\nNote: Run on reference benchmark environment for NFR-R9 validation."
-    );
+    println!("\nNote: Run on reference benchmark environment for NFR-R9 validation.");
     println!("==========================================\n");
 }
 

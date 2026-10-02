@@ -22,7 +22,7 @@ use opentelemetry::trace::{
     Span as _, SpanContext, SpanId, SpanKind, TraceContextExt, TraceFlags, TraceId, TraceState,
     Tracer,
 };
-use rand::Rng;
+use rand::RngExt;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tokio::time::interval;
@@ -1678,16 +1678,7 @@ mod tests {
             }
             async fn recover_zombie_tasks(
                 &self,
-            ) -> Result<
-                Vec<(
-                    TaskId,
-                    QueueName,
-                    iron_defer_domain::TaskKind,
-                    Option<String>,
-                    crate::ports::RecoveryOutcome,
-                )>,
-                TaskError,
-            > {
+            ) -> Result<Vec<crate::ports::RecoveredTask>, TaskError> {
                 unimplemented!()
             }
             async fn list_tasks(&self, _: &ListTasksFilter) -> Result<ListTasksResult, TaskError> {

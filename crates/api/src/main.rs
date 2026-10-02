@@ -79,7 +79,7 @@ fn run_serve(cli: &Cli, serve: &Serve) -> Result<(), Box<dyn std::error::Error>>
         Some(serve),
     )?;
 
-    init_tracing(&app_config.observability)?;
+    let tracer_provider = init_tracing(&app_config.observability)?;
 
     let (meter_provider, prom_registry) = init_metrics(&app_config.observability)?;
     let meter = meter_provider.meter("iron_defer");
@@ -161,7 +161,7 @@ fn run_serve(cli: &Cli, serve: &Serve) -> Result<(), Box<dyn std::error::Error>>
     })?;
 
     shutdown_meter_provider(|| meter_provider.shutdown());
-    shutdown_tracer_provider();
+    shutdown_tracer_provider(|| tracer_provider.shutdown());
     Ok(())
 }
 

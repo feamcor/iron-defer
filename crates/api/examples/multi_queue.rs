@@ -8,7 +8,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use iron_defer::{CancellationToken, IronDefer, Task, TaskContext, TaskError, TaskStatus, WorkerConfig};
+use iron_defer::{
+    CancellationToken, IronDefer, Task, TaskContext, TaskError, TaskStatus, WorkerConfig,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,14 +90,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Enqueue tasks to both queues (any engine can enqueue to any queue).
     for i in 0..5 {
-        fast_engine
-            .enqueue("fast", FastTask { id: i })
-            .await?;
+        fast_engine.enqueue("fast", FastTask { id: i }).await?;
     }
     for i in 0..3 {
-        fast_engine
-            .enqueue("slow", SlowTask { id: i })
-            .await?;
+        fast_engine.enqueue("slow", SlowTask { id: i }).await?;
     }
     println!("Enqueued 5 fast tasks and 3 slow tasks");
 
@@ -104,11 +102,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let fast_bg = fast_engine.clone();
     let t1 = token.clone();
-    let fast_handle = tokio::spawn(async move { let _ = fast_bg.start(t1).await; });
+    let fast_handle = tokio::spawn(async move {
+        let _ = fast_bg.start(t1).await;
+    });
 
     let slow_bg = slow_engine.clone();
     let t2 = token.clone();
-    let slow_handle = tokio::spawn(async move { let _ = slow_bg.start(t2).await; });
+    let slow_handle = tokio::spawn(async move {
+        let _ = slow_bg.start(t2).await;
+    });
 
     // Wait for all tasks to complete with timeout.
     let start = std::time::Instant::now();
@@ -117,8 +119,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::time::sleep(Duration::from_millis(500)).await;
         let fast_tasks = fast_engine.list("fast").await?;
         let slow_tasks = fast_engine.list("slow").await?;
-        let all_fast_done = !fast_tasks.is_empty() && fast_tasks.iter().all(|t| t.status() == TaskStatus::Completed);
-        let all_slow_done = !slow_tasks.is_empty() && slow_tasks.iter().all(|t| t.status() == TaskStatus::Completed);
+        let all_fast_done = !fast_tasks.is_empty()
+            && fast_tasks
+                .iter()
+                .all(|t| t.status() == TaskStatus::Completed);
+        let all_slow_done = !slow_tasks.is_empty()
+            && slow_tasks
+                .iter()
+                .all(|t| t.status() == TaskStatus::Completed);
         if all_fast_done && all_slow_done {
             println!("All tasks completed!");
             break;
@@ -131,12 +139,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     token.cancel();
     // Await background tasks with timeout to avoid deadlock on exit
-    let _ = tokio::time::timeout(
-        Duration::from_secs(5),
-        async {
-            let _ = tokio::try_join!(fast_handle, slow_handle);
-        }
-    ).await;
+    let _ = tokio::time::timeout(Duration::from_secs(5), async {
+        let _ = tokio::try_join!(fast_handle, slow_handle);
+    })
+    .await;
     println!("Done!");
     Ok(())
 }

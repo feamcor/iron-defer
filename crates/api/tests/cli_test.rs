@@ -41,8 +41,9 @@ async fn submit_creates_task_in_db() {
         limit: 10,
         offset: 0,
     };
-    let repo = std::sync::Arc::new(iron_defer_infrastructure::PostgresTaskRepository::new(pool, false))
-        as std::sync::Arc<dyn iron_defer_application::TaskRepository>;
+    let repo = std::sync::Arc::new(iron_defer_infrastructure::PostgresTaskRepository::new(
+        pool, false,
+    )) as std::sync::Arc<dyn iron_defer_application::TaskRepository>;
     let sched = iron_defer_application::SchedulerService::new(repo);
     let result = sched.list_tasks(&filter).await.unwrap();
     assert_eq!(result.total, 1);
@@ -90,8 +91,9 @@ async fn tasks_lists_created_tasks() {
     };
     let queue = common::unique_queue();
 
-    let repo = std::sync::Arc::new(iron_defer_infrastructure::PostgresTaskRepository::new(pool, false))
-        as std::sync::Arc<dyn iron_defer_application::TaskRepository>;
+    let repo = std::sync::Arc::new(iron_defer_infrastructure::PostgresTaskRepository::new(
+        pool, false,
+    )) as std::sync::Arc<dyn iron_defer_application::TaskRepository>;
     let sched = iron_defer_application::SchedulerService::new(repo);
     let qn = iron_defer_domain::QueueName::try_from(queue.as_str()).unwrap();
 

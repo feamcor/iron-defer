@@ -6,8 +6,8 @@
 
 #![allow(dead_code)]
 
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use iron_defer::{
@@ -145,11 +145,7 @@ impl Task for RetryCountingTask {
         if attempt < self.succeed_on_attempt {
             Err(TaskError::ExecutionFailed {
                 kind: ExecutionErrorKind::HandlerFailed {
-                    source: format!(
-                        "intentional failure on attempt {}",
-                        attempt
-                    )
-                    .into(),
+                    source: format!("intentional failure on attempt {}", attempt).into(),
                 },
             })
         } else {
@@ -251,10 +247,7 @@ pub async fn query_audit_log(pool: &PgPool, task_id: uuid::Uuid) -> Vec<AuditRow
     .expect("query audit log")
 }
 
-pub fn assert_audit_transitions(
-    audit_rows: &[AuditRow],
-    expected: &[(Option<&str>, &str)],
-) {
+pub fn assert_audit_transitions(audit_rows: &[AuditRow], expected: &[(Option<&str>, &str)]) {
     let actual: Vec<(Option<&str>, &str)> = audit_rows
         .iter()
         .map(|r| (r.from_status.as_deref(), r.to_status.as_str()))
@@ -296,9 +289,7 @@ impl Task for CheckpointStepTask {
     async fn execute(&self, ctx: &TaskContext) -> Result<(), TaskError> {
         let attempt = ctx.attempt().get() as u32;
         let start_step = match ctx.last_checkpoint() {
-            Some(v) => v.get("step")
-                .and_then(|s| s.as_u64())
-                .unwrap_or(0) as u32 + 1,
+            Some(v) => v.get("step").and_then(|s| s.as_u64()).unwrap_or(0) as u32 + 1,
             None => 1,
         };
 
@@ -395,7 +386,10 @@ impl Task for SuspendableTask {
         {
             let mut h = self.history.lock().unwrap();
             if let Some(signal) = ctx.signal_payload() {
-                h.push(format!("resumed:{}", signal["data"].as_str().unwrap_or("none")));
+                h.push(format!(
+                    "resumed:{}",
+                    signal["data"].as_str().unwrap_or("none")
+                ));
                 return Ok(());
             }
             if self.should_suspend {
@@ -405,7 +399,8 @@ impl Task for SuspendableTask {
                 return Ok(());
             }
         }
-        ctx.checkpoint(json!({"step": "pre_suspend", "data": "checkpoint_data"})).await?;
+        ctx.checkpoint(json!({"step": "pre_suspend", "data": "checkpoint_data"}))
+            .await?;
         ctx.suspend(None).await?;
         Ok(())
     }
@@ -417,7 +412,7 @@ pub async fn boot_regional_engine_pair(
     region: &str,
 ) -> Option<(TestServer, TestServer, PgPool)> {
     let pool = super::fresh_pool_on_shared_container().await?;
-    
+
     let engine1 = boot_e2e_engine_with_config(
         pool.clone(),
         queue,
@@ -427,7 +422,8 @@ pub async fn boot_regional_engine_pair(
             ..WorkerConfig::default()
         },
         false,
-    ).await?;
+    )
+    .await?;
 
     let engine2 = boot_e2e_engine_with_config(
         pool.clone(),
@@ -438,7 +434,8 @@ pub async fn boot_regional_engine_pair(
             ..WorkerConfig::default()
         },
         false,
-    ).await?;
+    )
+    .await?;
 
     Some((engine1, engine2, pool))
 }
@@ -574,10 +571,7 @@ pub async fn boot_e2e_engine_with_suspend(
 }
 
 /// Query the raw checkpoint column for a task directly via SQL.
-pub async fn query_checkpoint(
-    pool: &PgPool,
-    task_id: uuid::Uuid,
-) -> Option<serde_json::Value> {
+pub async fn query_checkpoint(pool: &PgPool, task_id: uuid::Uuid) -> Option<serde_json::Value> {
     let row: (Option<serde_json::Value>,) =
         sqlx::query_as("SELECT checkpoint FROM tasks WHERE id = $1")
             .bind(task_id)

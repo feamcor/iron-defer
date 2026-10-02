@@ -127,9 +127,7 @@ async fn e2e_queue_stats_pending_decreases_to_zero() {
         }
 
         if start.elapsed() > timeout {
-            panic!(
-                "timed out waiting for pending to reach 0, current: {current_pending}"
-            );
+            panic!("timed out waiting for pending to reach 0, current: {current_pending}");
         }
     }
 
@@ -223,11 +221,11 @@ async fn e2e_queue_stats_shows_running_during_processing() {
             .await
             .expect("get queues");
         let stats: Vec<serde_json::Value> = resp.json().await.expect("json");
-        if let Some(q) = stats.iter().find(|s| s["queue"].as_str() == Some(&queue)) {
-            if q["running"].as_u64().unwrap_or(0) > 0 {
-                saw_running = true;
-                break;
-            }
+        if let Some(q) = stats.iter().find(|s| s["queue"].as_str() == Some(&queue))
+            && q["running"].as_u64().unwrap_or(0) > 0
+        {
+            saw_running = true;
+            break;
         }
     }
     assert!(

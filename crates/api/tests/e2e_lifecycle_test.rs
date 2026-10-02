@@ -18,7 +18,12 @@ async fn e2e_lifecycle_library_api() {
 
     let record = server
         .engine
-        .enqueue(&queue, E2eTask { data: "lib-api".into() })
+        .enqueue(
+            &queue,
+            E2eTask {
+                data: "lib-api".into(),
+            },
+        )
         .await
         .expect("enqueue");
 
@@ -62,8 +67,7 @@ async fn e2e_lifecycle_rest_api() {
     let post_body: serde_json::Value = resp.json().await.expect("json");
     let task_id = post_body["id"].as_str().expect("id");
 
-    let body =
-        e2e::wait_for_status(&client, &server.base_url, task_id, "completed", TIMEOUT).await;
+    let body = e2e::wait_for_status(&client, &server.base_url, task_id, "completed", TIMEOUT).await;
 
     assert_eq!(body["queue"], queue.as_str());
     assert_eq!(body["kind"], "e2e_test");
@@ -106,8 +110,7 @@ async fn e2e_lifecycle_cli() {
     let task_id = cli_output["id"].as_str().expect("CLI task id");
 
     let client = reqwest::Client::new();
-    let body =
-        e2e::wait_for_status(&client, &server.base_url, task_id, "completed", TIMEOUT).await;
+    let body = e2e::wait_for_status(&client, &server.base_url, task_id, "completed", TIMEOUT).await;
 
     assert_eq!(body["status"], "completed");
     assert_eq!(body["kind"], "e2e_test");
@@ -152,7 +155,12 @@ async fn e2e_lifecycle_all_interfaces_consistent() {
 
     let record = server
         .engine
-        .enqueue(&queue, E2eTask { data: "consistent".into() })
+        .enqueue(
+            &queue,
+            E2eTask {
+                data: "consistent".into(),
+            },
+        )
         .await
         .expect("enqueue");
     let task_id = record.id();

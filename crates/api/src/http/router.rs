@@ -33,7 +33,10 @@ pub fn build(engine: Arc<IronDefer>) -> Router {
             get(tasks::get_task).delete(tasks::delete_task),
         )
         .route("/tasks/{id}/audit", get(tasks::get_audit_log))
-        .route("/tasks/{id}/signal", axum::routing::post(tasks::signal_task))
+        .route(
+            "/tasks/{id}/signal",
+            axum::routing::post(tasks::signal_task),
+        )
         .route("/queues", get(queues::list_queues))
         .route("/health", get(health::liveness))
         .route("/health/ready", get(health::readiness))

@@ -55,14 +55,15 @@ impl Task for CheckpointStepTask {
             }))
             .await?;
 
-            if let Some(fail_at) = self.fail_after_step {
-                if step == fail_at && ctx.attempt().get() == 1 {
-                    return Err(TaskError::ExecutionFailed {
-                        kind: ExecutionErrorKind::HandlerFailed {
-                            source: format!("intentional failure after step {step}").into(),
-                        },
-                    });
-                }
+            if let Some(fail_at) = self.fail_after_step
+                && step == fail_at
+                && ctx.attempt().get() == 1
+            {
+                return Err(TaskError::ExecutionFailed {
+                    kind: ExecutionErrorKind::HandlerFailed {
+                        source: format!("intentional failure after step {step}").into(),
+                    },
+                });
             }
         }
         Ok(())
@@ -170,18 +171,21 @@ async fn checkpoint_persists_and_survives_retry() {
     let task = CheckpointStepTask::failing_after(5, 3);
     let task_id = enqueue_checkpoint_task(&client, &server.base_url, &queue, &task).await;
 
-    let result = e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
+    let result =
+        e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let row: Option<(Option<serde_json::Value>,)> = sqlx::query_as(
-        "SELECT checkpoint FROM tasks WHERE id = $1",
-    )
-    .bind(uuid::Uuid::parse_str(&task_id).unwrap())
-    .fetch_optional(&pool)
-    .await
-    .expect("query");
+    let row: Option<(Option<serde_json::Value>,)> =
+        sqlx::query_as("SELECT checkpoint FROM tasks WHERE id = $1")
+            .bind(uuid::Uuid::parse_str(&task_id).unwrap())
+            .fetch_optional(&pool)
+            .await
+            .expect("query");
     let checkpoint = row.expect("task exists").0;
-    assert!(checkpoint.is_none(), "checkpoint should be cleared after completion");
+    assert!(
+        checkpoint.is_none(),
+        "checkpoint should be cleared after completion"
+    );
 
     server.shutdown().await;
 }
@@ -199,7 +203,8 @@ async fn checkpoint_none_on_first_attempt() {
     let task = CheckpointStepTask::new(3);
     let task_id = enqueue_checkpoint_task(&client, &server.base_url, &queue, &task).await;
 
-    let result = e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
+    let result =
+        e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
     server.shutdown().await;
@@ -218,17 +223,20 @@ async fn checkpoint_cleared_on_completion() {
     let task = CheckpointStepTask::new(3);
     let task_id = enqueue_checkpoint_task(&client, &server.base_url, &queue, &task).await;
 
-    let result = e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
+    let result =
+        e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let row: (Option<serde_json::Value>,) = sqlx::query_as(
-        "SELECT checkpoint FROM tasks WHERE id = $1",
-    )
-    .bind(uuid::Uuid::parse_str(&task_id).unwrap())
-    .fetch_one(&pool)
-    .await
-    .expect("query");
-    assert!(row.0.is_none(), "checkpoint should be NULL after completion");
+    let row: (Option<serde_json::Value>,) =
+        sqlx::query_as("SELECT checkpoint FROM tasks WHERE id = $1")
+            .bind(uuid::Uuid::parse_str(&task_id).unwrap())
+            .fetch_one(&pool)
+            .await
+            .expect("query");
+    assert!(
+        row.0.is_none(),
+        "checkpoint should be NULL after completion"
+    );
 
     server.shutdown().await;
 }
@@ -246,9 +254,16 @@ async fn checkpoint_visible_in_rest_api() {
     let task = CheckpointStepTask::new(3);
     let task_id = enqueue_checkpoint_task(&client, &server.base_url, &queue, &task).await;
 
-    let result = e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
-    assert!(result.get("lastCheckpoint").is_some(), "response must include lastCheckpoint field");
-    assert!(result["lastCheckpoint"].is_null(), "lastCheckpoint should be null after completion");
+    let result =
+        e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
+    assert!(
+        result.get("lastCheckpoint").is_some(),
+        "response must include lastCheckpoint field"
+    );
+    assert!(
+        result["lastCheckpoint"].is_null(),
+        "lastCheckpoint should be null after completion"
+    );
 
     server.shutdown().await;
 }
@@ -284,17 +299,20 @@ async fn checkpoint_multiple_overwrites() {
     let task = CheckpointStepTask::new(5);
     let task_id = enqueue_checkpoint_task(&client, &server.base_url, &queue, &task).await;
 
-    let result = e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
+    let result =
+        e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let row: (Option<serde_json::Value>,) = sqlx::query_as(
-        "SELECT checkpoint FROM tasks WHERE id = $1",
-    )
-    .bind(uuid::Uuid::parse_str(&task_id).unwrap())
-    .fetch_one(&pool)
-    .await
-    .expect("query");
-    assert!(row.0.is_none(), "checkpoint should be cleared after completion (was overwritten 5 times during execution)");
+    let row: (Option<serde_json::Value>,) =
+        sqlx::query_as("SELECT checkpoint FROM tasks WHERE id = $1")
+            .bind(uuid::Uuid::parse_str(&task_id).unwrap())
+            .fetch_one(&pool)
+            .await
+            .expect("query");
+    assert!(
+        row.0.is_none(),
+        "checkpoint should be cleared after completion (was overwritten 5 times during execution)"
+    );
 
     server.shutdown().await;
 }

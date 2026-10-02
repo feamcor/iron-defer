@@ -108,11 +108,11 @@ async fn e2e_readiness_probe_db_outage_cycle() {
     let mut saw_503 = false;
     for _ in 0..30 {
         tokio::time::sleep(Duration::from_secs(1)).await;
-        if let Ok(resp) = client.get(format!("{base_url}/health/ready")).send().await {
-            if resp.status() == 503 {
-                saw_503 = true;
-                break;
-            }
+        if let Ok(resp) = client.get(format!("{base_url}/health/ready")).send().await
+            && resp.status() == 503
+        {
+            saw_503 = true;
+            break;
         }
     }
     assert!(
@@ -127,11 +127,11 @@ async fn e2e_readiness_probe_db_outage_cycle() {
     let mut saw_200 = false;
     for _ in 0..45 {
         tokio::time::sleep(Duration::from_secs(1)).await;
-        if let Ok(resp) = client.get(format!("{base_url}/health/ready")).send().await {
-            if resp.status() == 200 {
-                saw_200 = true;
-                break;
-            }
+        if let Ok(resp) = client.get(format!("{base_url}/health/ready")).send().await
+            && resp.status() == 200
+        {
+            saw_200 = true;
+            break;
         }
     }
     assert!(
@@ -153,10 +153,7 @@ async fn e2e_readiness_probe_db_outage_cycle() {
             break;
         }
     }
-    assert!(
-        all_done,
-        "pending tasks should complete after DB recovery"
-    );
+    assert!(all_done, "pending tasks should complete after DB recovery");
 
     token.cancel();
     // In-process server shutdown

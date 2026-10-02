@@ -32,11 +32,11 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use iron_defer_application::{
-    Metrics, ObservabilityConfig, CLAIM_BACKOFF_SECONDS, CLAIM_BACKOFF_TOTAL,
-    IDEMPOTENCY_KEYS_CLEANED_TOTAL, POOL_CONNECTIONS_ACTIVE, POOL_CONNECTIONS_IDLE,
-    POOL_CONNECTIONS_TOTAL, SUSPEND_TIMEOUT_TOTAL, TASKS_PENDING, TASKS_RUNNING,
-    TASKS_SUSPENDED_TOTAL, TASK_ATTEMPTS_TOTAL, TASK_DURATION_SECONDS, TASK_FAILURES_TOTAL,
-    WORKER_POOL_UTILIZATION, ZOMBIE_RECOVERIES_TOTAL,
+    CLAIM_BACKOFF_SECONDS, CLAIM_BACKOFF_TOTAL, IDEMPOTENCY_KEYS_CLEANED_TOTAL, Metrics,
+    ObservabilityConfig, POOL_CONNECTIONS_ACTIVE, POOL_CONNECTIONS_IDLE, POOL_CONNECTIONS_TOTAL,
+    SUSPEND_TIMEOUT_TOTAL, TASK_ATTEMPTS_TOTAL, TASK_DURATION_SECONDS, TASK_FAILURES_TOTAL,
+    TASKS_PENDING, TASKS_RUNNING, TASKS_SUSPENDED_TOTAL, WORKER_POOL_UTILIZATION,
+    ZOMBIE_RECOVERIES_TOTAL,
 };
 use iron_defer_domain::TaskError;
 use opentelemetry::KeyValue;
@@ -300,11 +300,8 @@ pub fn init_metrics(
                 source: Box::new(e),
             })?;
 
-        let periodic_reader = opentelemetry_sdk::metrics::PeriodicReader::builder(
-            otlp_exporter,
-            opentelemetry_sdk::runtime::Tokio,
-        )
-        .build();
+        let periodic_reader =
+            opentelemetry_sdk::metrics::PeriodicReader::builder(otlp_exporter).build();
 
         builder = builder.with_reader(periodic_reader);
     }

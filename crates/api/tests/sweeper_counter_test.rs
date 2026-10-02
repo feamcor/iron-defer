@@ -76,7 +76,8 @@ async fn sweeper_increments_zombie_recovery_counter() {
         .expect("enqueue");
     let task_id = saved.id();
 
-    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), false)) as Arc<dyn TaskRepository>;
+    let repo =
+        Arc::new(PostgresTaskRepository::new(pool.clone(), false)) as Arc<dyn TaskRepository>;
     let queue_name = QueueName::try_from(queue.as_str()).expect("valid queue");
     let worker_id = WorkerId::new();
     let claimed = repo

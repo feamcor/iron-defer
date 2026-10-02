@@ -21,7 +21,10 @@ impl Task for FlakyTask {
 
     async fn execute(&self, ctx: &TaskContext) -> Result<(), TaskError> {
         let current = ctx.attempt().get();
-        println!("  attempt {current}: executing FlakyTask (fails until attempt {})", self.fail_until_attempt);
+        println!(
+            "  attempt {current}: executing FlakyTask (fails until attempt {})",
+            self.fail_until_attempt
+        );
         if current < self.fail_until_attempt {
             return Err(TaskError::ExecutionFailed {
                 kind: iron_defer::ExecutionErrorKind::HandlerFailed {
@@ -94,7 +97,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         break;
                     }
                     TaskStatus::Failed => {
-                        println!("Task permanently failed after {} attempts.", r.attempts().get());
+                        println!(
+                            "Task permanently failed after {} attempts.",
+                            r.attempts().get()
+                        );
                         break;
                     }
                     _ => {}

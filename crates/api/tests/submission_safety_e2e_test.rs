@@ -82,7 +82,11 @@ async fn concurrent_idempotent_enqueue_via_library_api() {
     }
 
     assert!(errors.is_empty(), "expected 0 errors, got {errors:?}");
-    assert_eq!(task_ids.len(), 1, "all 10 submissions must return the same task");
+    assert_eq!(
+        task_ids.len(),
+        1,
+        "all 10 submissions must return the same task"
+    );
 
     let (count,): (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE queue = $1 AND idempotency_key = $2")
@@ -163,14 +167,16 @@ async fn completed_task_with_active_key_allows_new_submission() {
     let _ = tokio::time::timeout(std::time::Duration::from_secs(5), worker_handle).await;
 
     // Verify the key is still present (NOT cleaned by sweeper — not expired)
-    let (key_present,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM tasks WHERE id = $1 AND idempotency_key IS NOT NULL",
-    )
-    .bind(first_record.id().as_uuid())
-    .fetch_one(&pool)
-    .await
-    .expect("key check");
-    assert_eq!(key_present, 1, "key should still be present (not yet expired)");
+    let (key_present,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE id = $1 AND idempotency_key IS NOT NULL")
+            .bind(first_record.id().as_uuid())
+            .fetch_one(&pool)
+            .await
+            .expect("key check");
+    assert_eq!(
+        key_present, 1,
+        "key should still be present (not yet expired)"
+    );
 
     // Re-submit with the same key — should create a NEW task because the
     // partial index excludes completed tasks
@@ -223,11 +229,10 @@ async fn multiple_tasks_in_tx_invisible_until_commit() {
             .register::<SafetyTask>()
             .queue(&queue)
             .skip_migrations(true)
-            .worker_config({
-                let mut wc = iron_defer::WorkerConfig::default();
-                wc.poll_interval = std::time::Duration::from_millis(50);
-                wc.concurrency = 4;
-                wc
+            .worker_config(iron_defer::WorkerConfig {
+                poll_interval: std::time::Duration::from_millis(50),
+                concurrency: 4,
+                ..iron_defer::WorkerConfig::default()
             })
             .build()
             .await
@@ -280,13 +285,12 @@ async fn multiple_tasks_in_tx_invisible_until_commit() {
     // Wait for all 5 to reach completed
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
     loop {
-        let (completed,): (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM tasks WHERE queue = $1 AND status = 'completed'",
-        )
-        .bind(&queue)
-        .fetch_one(&pool)
-        .await
-        .expect("completed count");
+        let (completed,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE queue = $1 AND status = 'completed'")
+                .bind(&queue)
+                .fetch_one(&pool)
+                .await
+                .expect("completed count");
         if completed >= 5 {
             break;
         }

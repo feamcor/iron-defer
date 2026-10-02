@@ -24,10 +24,14 @@
 
 use iron_defer_infrastructure::MIGRATOR;
 use sqlx::PgPool;
-use testcontainers::ContainerAsync;
+use testcontainers::{ContainerAsync, ImageExt};
 use testcontainers_modules::postgres::Postgres;
 use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use tokio::sync::OnceCell;
+
+/// Pinned Postgres image tag for test containers. `testcontainers-modules`
+/// defaults to `11-alpine`; keep tests aligned with the compose/CI version.
+const POSTGRES_TAG: &str = "18-alpine";
 
 #[allow(dead_code)] // each integration-test binary uses a different subset of helpers
 static TEST_DB: OnceCell<Option<TestDb>> = OnceCell::const_new();
@@ -70,7 +74,7 @@ pub async fn test_pool() -> Option<&'static PgPool> {
 }
 
 async fn boot_test_db() -> Result<TestDb, Box<dyn std::error::Error + Send + Sync>> {
-    let container = Postgres::default().start().await?;
+    let container = Postgres::default().with_tag(POSTGRES_TAG).start().await?;
     let port = container.get_host_port_ipv4(5432).await?;
     let url = format!("postgres://postgres:postgres@127.0.0.1:{port}/postgres");
     let pool = PgPool::connect(&url).await?;

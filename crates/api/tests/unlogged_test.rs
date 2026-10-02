@@ -21,13 +21,12 @@ fn fast_worker_config() -> WorkerConfig {
 }
 
 async fn query_table_persistence(pool: &PgPool, table: &str) -> Option<TablePersistence> {
-    let row: Option<(String,)> = sqlx::query_as(
-        "SELECT relpersistence::text FROM pg_class WHERE relname = $1",
-    )
-    .bind(table)
-    .fetch_optional(pool)
-    .await
-    .expect("query pg_class");
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT relpersistence::text FROM pg_class WHERE relname = $1")
+            .bind(table)
+            .fetch_optional(pool)
+            .await
+            .expect("query pg_class");
     row.map(|r| TablePersistence::try_from(r.0.as_str()).expect("known relpersistence value"))
 }
 
@@ -207,12 +206,19 @@ async fn unlogged_mode_basic_operations() {
 
     // Enqueue and verify task completes
     let record = engine
-        .enqueue(&queue, E2eTask { data: "unlogged-test".into() })
+        .enqueue(
+            &queue,
+            E2eTask {
+                data: "unlogged-test".into(),
+            },
+        )
         .await
         .expect("enqueue");
 
     let client = reqwest::Client::new();
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:0").await.expect("bind");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:0")
+        .await
+        .expect("bind");
     let addr = listener.local_addr().expect("addr");
     let base_url = format!("http://127.0.0.1:{}", addr.port());
     let router = iron_defer::http::router::build(Arc::clone(&engine));

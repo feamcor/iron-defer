@@ -64,9 +64,7 @@ async fn e2e_data_integrity_all_tasks_reach_terminal_state() {
             break;
         }
         if start.elapsed() > timeout {
-            panic!(
-                "only {completed}/{task_count} tasks completed within timeout"
-            );
+            panic!("only {completed}/{task_count} tasks completed within timeout");
         }
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     }

@@ -130,7 +130,10 @@ async fn e2e_metrics_scrape_after_task_processing() {
 
     // Verify labels on duration histogram (OTel may double the _seconds suffix)
     assert!(
-        body.lines().any(|l| l.contains("iron_defer_task_duration_seconds") && l.contains("_count") && l.contains("status=\"completed\"")),
+        body.lines()
+            .any(|l| l.contains("iron_defer_task_duration_seconds")
+                && l.contains("_count")
+                && l.contains("status=\"completed\"")),
         "duration histogram count line with status=completed not found"
     );
 
@@ -140,9 +143,12 @@ async fn e2e_metrics_scrape_after_task_processing() {
         .lines()
         .find(|l| attempts_re.is_match(l) && !l.starts_with('#'))
         .expect("attempts counter line");
-    
+
     let caps = attempts_re.captures(attempts_line).unwrap();
-    let attempts_value: f64 = caps.get(1).map(|m| m.as_str().parse().unwrap_or(0.0)).unwrap_or(0.0);
+    let attempts_value: f64 = caps
+        .get(1)
+        .map(|m| m.as_str().parse().unwrap_or(0.0))
+        .unwrap_or(0.0);
     assert!(
         attempts_value >= 3.0,
         "expected at least 3 attempts, got {attempts_value}"
@@ -150,17 +156,18 @@ async fn e2e_metrics_scrape_after_task_processing() {
 
     // Verify format: HELP and TYPE lines present for iron_defer metrics
     assert!(
-        body.lines()
-            .any(|l| l.starts_with("# HELP iron_defer_")),
+        body.lines().any(|l| l.starts_with("# HELP iron_defer_")),
         "missing HELP lines for iron_defer metrics"
     );
     assert!(
-        body.lines()
-            .any(|l| l.starts_with("# TYPE iron_defer_")),
+        body.lines().any(|l| l.starts_with("# TYPE iron_defer_")),
         "missing TYPE lines for iron_defer metrics"
     );
 
     server_token.cancel();
     let _ = tokio::time::timeout(std::time::Duration::from_secs(5), server_handle).await;
-    harness.provider.shutdown().expect("meter provider shutdown");
+    harness
+        .provider
+        .shutdown()
+        .expect("meter provider shutdown");
 }

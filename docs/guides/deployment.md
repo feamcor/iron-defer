@@ -20,7 +20,7 @@ docker compose -f docker/docker-compose.dev.yml up -d
 
 The [`Dockerfile`](../../docker/Dockerfile) uses a multi-stage build:
 
-1. **Builder stage** (rust:1.94-slim) — compiles the release binary with `SQLX_OFFLINE=true`
+1. **Builder stage** (rust:1.99-slim) — compiles the release binary with `SQLX_OFFLINE=true`
 2. **Runtime stage** (distroless/cc-debian12) — minimal image with just the binary
 
 Build manually:

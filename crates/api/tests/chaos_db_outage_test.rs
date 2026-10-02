@@ -149,17 +149,17 @@ async fn postgres_outage_survives_reconnection() {
                 status != "completed" && status != "failed" && status != "cancelled"
             });
 
-            let _ = write!(diagnostic, "Non-terminal tasks ({}):\n", stuck.len());
+            let _ = writeln!(diagnostic, "Non-terminal tasks ({}):", stuck.len());
             for (id, status, attempts, claimed_by) in &stuck {
-                let _ = write!(
+                let _ = writeln!(
                     diagnostic,
-                    "  id={id} status={status} attempts={attempts} claimed_by={}\n",
+                    "  id={id} status={status} attempts={attempts} claimed_by={}",
                     claimed_by.as_deref().unwrap_or("NULL")
                 );
             }
-            let _ = write!(
+            let _ = writeln!(
                 diagnostic,
-                "Terminal tasks: {} completed/failed\n",
+                "Terminal tasks: {} completed/failed",
                 terminal.len()
             );
         } else {

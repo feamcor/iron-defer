@@ -19,7 +19,12 @@ async fn e2e_audit_complete_lifecycle() {
     for i in 0..5 {
         let record = server
             .engine
-            .enqueue(&queue, E2eTask { data: format!("audit-{i}") })
+            .enqueue(
+                &queue,
+                E2eTask {
+                    data: format!("audit-{i}"),
+                },
+            )
             .await
             .expect("enqueue");
         task_ids.push(record.id());
@@ -47,17 +52,20 @@ async fn e2e_audit_complete_lifecycle() {
         assert!(
             transitions.contains(&(None, "pending")),
             "task {} missing NULL→pending transition, got: {:?}",
-            task_id, transitions
+            task_id,
+            transitions
         );
         assert!(
             transitions.contains(&(Some("pending"), "running")),
             "task {} missing pending→running transition, got: {:?}",
-            task_id, transitions
+            task_id,
+            transitions
         );
         assert!(
             transitions.contains(&(Some("running"), "completed")),
             "task {} missing running→completed transition, got: {:?}",
-            task_id, transitions
+            task_id,
+            transitions
         );
     }
 
@@ -113,7 +121,7 @@ async fn e2e_audit_retry_lifecycle() {
     .await;
 
     let rows = e2e::query_audit_log(&pool, *record.id().as_uuid()).await;
-    
+
     // Expected transitions for 1 retry:
     // 1. NULL -> pending
     // 2. pending -> running
@@ -165,10 +173,7 @@ async fn e2e_audit_cancel_lifecycle() {
     );
 
     let rows = e2e::query_audit_log(&pool, *record.id().as_uuid()).await;
-    let expected = vec![
-        (None, "pending"),
-        (Some("pending"), "cancelled"),
-    ];
+    let expected = vec![(None, "pending"), (Some("pending"), "cancelled")];
     e2e::assert_audit_transitions(&rows, &expected);
 
     server.shutdown().await;
@@ -237,7 +242,12 @@ async fn e2e_audit_immutability_rejects_update() {
 
     let record = server
         .engine
-        .enqueue(&queue, E2eTask { data: "immutable-update".into() })
+        .enqueue(
+            &queue,
+            E2eTask {
+                data: "immutable-update".into(),
+            },
+        )
         .await
         .expect("enqueue");
 
@@ -262,7 +272,11 @@ async fn e2e_audit_immutability_rejects_update() {
 
     let err = result.expect_err("UPDATE must be rejected by immutability trigger");
     if let Some(db_err) = err.as_database_error() {
-        assert_eq!(db_err.code(), Some(std::borrow::Cow::Borrowed("P0001")), "expected SQLSTATE P0001 (RAISE EXCEPTION)");
+        assert_eq!(
+            db_err.code(),
+            Some(std::borrow::Cow::Borrowed("P0001")),
+            "expected SQLSTATE P0001 (RAISE EXCEPTION)"
+        );
     }
     let err_str = err.to_string();
     assert!(
@@ -283,7 +297,12 @@ async fn e2e_audit_immutability_rejects_delete() {
 
     let record = server
         .engine
-        .enqueue(&queue, E2eTask { data: "immutable-delete".into() })
+        .enqueue(
+            &queue,
+            E2eTask {
+                data: "immutable-delete".into(),
+            },
+        )
         .await
         .expect("enqueue");
 
@@ -308,7 +327,11 @@ async fn e2e_audit_immutability_rejects_delete() {
 
     let err = result.expect_err("DELETE must be rejected by immutability trigger");
     if let Some(db_err) = err.as_database_error() {
-        assert_eq!(db_err.code(), Some(std::borrow::Cow::Borrowed("P0001")), "expected SQLSTATE P0001 (RAISE EXCEPTION)");
+        assert_eq!(
+            db_err.code(),
+            Some(std::borrow::Cow::Borrowed("P0001")),
+            "expected SQLSTATE P0001 (RAISE EXCEPTION)"
+        );
     }
     let err_str = err.to_string();
     assert!(
@@ -334,7 +357,12 @@ async fn e2e_audit_atomicity_no_orphaned_state_changes() {
     for i in 0..n {
         let record = server
             .engine
-            .enqueue(&queue, E2eTask { data: format!("atomicity-{i}") })
+            .enqueue(
+                &queue,
+                E2eTask {
+                    data: format!("atomicity-{i}"),
+                },
+            )
             .await
             .expect("enqueue");
         task_ids.push(*record.id().as_uuid());

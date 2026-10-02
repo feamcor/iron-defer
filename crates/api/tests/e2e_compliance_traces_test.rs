@@ -6,8 +6,8 @@ use std::time::Duration;
 use iron_defer::{IronDefer, Task, WorkerConfig};
 use opentelemetry::global;
 use opentelemetry::trace::TraceId;
-use opentelemetry_sdk::testing::trace::InMemorySpanExporter;
-use opentelemetry_sdk::trace::TracerProvider;
+use opentelemetry_sdk::trace::InMemorySpanExporter;
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use serde_json::json;
 use serial_test::serial;
 
@@ -28,14 +28,22 @@ fn fast_worker_config() -> WorkerConfig {
 }
 
 fn traceparent(trace_id: &str) -> String {
-    assert_eq!(trace_id.len(), 32, "trace_id must be 32 characters (128-bit hex)");
+    assert_eq!(
+        trace_id.len(),
+        32,
+        "trace_id must be 32 characters (128-bit hex)"
+    );
     format!("00-{trace_id}-b7ad6b7169203331-01")
 }
 
 async fn boot_trace_engine(
     pool: sqlx::PgPool,
     queue: &str,
-) -> (Arc<IronDefer>, tokio_util::sync::CancellationToken, tokio::task::JoinHandle<()>) {
+) -> (
+    Arc<IronDefer>,
+    tokio_util::sync::CancellationToken,
+    tokio::task::JoinHandle<()>,
+) {
     let harness = build_harness();
     let engine = IronDefer::builder()
         .pool(pool)
@@ -128,12 +136,12 @@ async fn boot_trace_e2e_server(queue: &str) -> Option<(e2e::TestServer, sqlx::Pg
 
 struct TracerGuard;
 impl TracerGuard {
-    fn init() -> (InMemorySpanExporter, TracerProvider) {
+    fn init() -> (InMemorySpanExporter, SdkTracerProvider) {
         let exporter = InMemorySpanExporter::default();
-        let provider = TracerProvider::builder()
+        let provider = SdkTracerProvider::builder()
             .with_simple_exporter(exporter.clone())
             .build();
-        let _ = global::set_tracer_provider(provider.clone());
+        global::set_tracer_provider(provider.clone());
         (exporter, provider)
     }
 }
@@ -176,7 +184,7 @@ async fn e2e_trace_propagation_single_task() {
     common::otel::await_all_terminal(&engine, &queue, 40, Duration::from_millis(100)).await;
     shutdown_engine(token, handle).await;
 
-    provider.force_flush();
+    provider.force_flush().expect("force flush");
     let spans = exporter.get_finished_spans().expect("get spans");
 
     let exec_span = spans
@@ -198,10 +206,7 @@ async fn e2e_trace_propagation_single_task() {
         .collect();
     assert!(attrs.contains_key("task_id"), "missing task_id attr");
     assert_eq!(attrs.get("queue").map(String::as_str), Some(&*queue));
-    assert_eq!(
-        attrs.get("kind").map(String::as_str),
-        Some("e2e_test")
-    );
+    assert_eq!(attrs.get("kind").map(String::as_str), Some("e2e_test"));
     assert!(attrs.contains_key("attempt"), "missing attempt attr");
 
     let found = engine
@@ -245,7 +250,7 @@ async fn e2e_trace_propagation_across_retries() {
     common::otel::await_all_terminal(&engine, &queue, 120, Duration::from_millis(200)).await;
     shutdown_engine(token, handle).await;
 
-    provider.force_flush();
+    provider.force_flush().expect("force flush");
     let spans = exporter.get_finished_spans().expect("get spans");
 
     let exec_spans: Vec<_> = spans
@@ -273,11 +278,7 @@ async fn e2e_trace_propagation_across_retries() {
         .iter()
         .map(|s| s.span_context.span_id())
         .collect();
-    assert_eq!(
-        span_ids.len(),
-        3,
-        "each retry must have a distinct span_id"
-    );
+    assert_eq!(span_ids.len(), 3, "each retry must have a distinct span_id");
 
     let mut attempts: Vec<i64> = exec_spans
         .iter()
@@ -330,7 +331,7 @@ async fn e2e_no_trace_without_traceparent() {
     common::otel::await_all_terminal(&engine, &queue, 40, Duration::from_millis(100)).await;
     shutdown_engine(token, handle).await;
 
-    provider.force_flush();
+    provider.force_flush().expect("force flush");
     let spans = exporter.get_finished_spans().expect("get spans");
 
     let exec_spans: Vec<_> = spans
@@ -383,7 +384,7 @@ async fn e2e_otel_events_emitted_for_transitions() {
     common::otel::await_all_terminal(&engine, &queue, 40, Duration::from_millis(100)).await;
     shutdown_engine(token, handle).await;
 
-    provider.force_flush();
+    provider.force_flush().expect("force flush");
     let spans = exporter.get_finished_spans().expect("get spans");
 
     let exec_span = spans
@@ -410,7 +411,10 @@ async fn e2e_otel_events_emitted_for_transitions() {
             .map(|kv| (kv.key.to_string(), kv.value.to_string()))
             .collect();
         assert!(attrs.contains_key("task_id"), "event missing task_id");
-        assert!(attrs.contains_key("from_status"), "event missing from_status");
+        assert!(
+            attrs.contains_key("from_status"),
+            "event missing from_status"
+        );
         assert!(attrs.contains_key("to_status"), "event missing to_status");
         assert!(attrs.contains_key("queue"), "event missing queue");
         assert!(attrs.contains_key("kind"), "event missing kind");
@@ -418,12 +422,20 @@ async fn e2e_otel_events_emitted_for_transitions() {
     }
 
     let has_pending_running = transition_events.iter().any(|e| {
-        e.attributes.iter().any(|kv| kv.key.as_str() == "from_status" && kv.value.to_string() == "pending")
-            && e.attributes.iter().any(|kv| kv.key.as_str() == "to_status" && kv.value.to_string() == "running")
+        e.attributes
+            .iter()
+            .any(|kv| kv.key.as_str() == "from_status" && kv.value.to_string() == "pending")
+            && e.attributes
+                .iter()
+                .any(|kv| kv.key.as_str() == "to_status" && kv.value.to_string() == "running")
     });
     let has_running_completed = transition_events.iter().any(|e| {
-        e.attributes.iter().any(|kv| kv.key.as_str() == "from_status" && kv.value.to_string() == "running")
-            && e.attributes.iter().any(|kv| kv.key.as_str() == "to_status" && kv.value.to_string() == "completed")
+        e.attributes
+            .iter()
+            .any(|kv| kv.key.as_str() == "from_status" && kv.value.to_string() == "running")
+            && e.attributes
+                .iter()
+                .any(|kv| kv.key.as_str() == "to_status" && kv.value.to_string() == "completed")
     });
     assert!(
         has_pending_running,
@@ -467,7 +479,7 @@ async fn e2e_trace_propagation_via_rest_api() {
 
     e2e::wait_for_status(&client, &server.base_url, task_id, "completed", TIMEOUT).await;
 
-    provider.force_flush();
+    provider.force_flush().expect("force flush");
     let spans = exporter.get_finished_spans().expect("get spans");
 
     let exec_span = spans

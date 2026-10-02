@@ -49,8 +49,7 @@ async fn audit_lifecycle_pending_running_completed() {
         .await
         .expect("enqueue");
 
-    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true))
-        as Arc<dyn TaskRepository>;
+    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true)) as Arc<dyn TaskRepository>;
 
     let worker_id = iron_defer_domain::WorkerId::new();
     let claimed = repo
@@ -66,18 +65,44 @@ async fn audit_lifecycle_pending_running_completed() {
 
     repo.complete(claimed.id()).await.expect("complete");
 
-    let entries = repo.audit_log(record.id(), 100, 0).await.expect("audit_log");
-    assert_eq!(entries.entries.len(), 3, "expected 3 audit entries, got {}", entries.entries.len());
+    let entries = repo
+        .audit_log(record.id(), 100, 0)
+        .await
+        .expect("audit_log");
+    assert_eq!(
+        entries.entries.len(),
+        3,
+        "expected 3 audit entries, got {}",
+        entries.entries.len()
+    );
 
     assert!(entries.entries[0].from_status().is_none());
-    assert_eq!(entries.entries[0].to_status(), iron_defer_domain::TaskStatus::Pending);
+    assert_eq!(
+        entries.entries[0].to_status(),
+        iron_defer_domain::TaskStatus::Pending
+    );
 
-    assert_eq!(entries.entries[1].from_status(), Some(iron_defer_domain::TaskStatus::Pending));
-    assert_eq!(entries.entries[1].to_status(), iron_defer_domain::TaskStatus::Running);
-    assert_eq!(*entries.entries[1].worker_id().unwrap().as_uuid(), *worker_id.as_uuid());
+    assert_eq!(
+        entries.entries[1].from_status(),
+        Some(iron_defer_domain::TaskStatus::Pending)
+    );
+    assert_eq!(
+        entries.entries[1].to_status(),
+        iron_defer_domain::TaskStatus::Running
+    );
+    assert_eq!(
+        *entries.entries[1].worker_id().unwrap().as_uuid(),
+        *worker_id.as_uuid()
+    );
 
-    assert_eq!(entries.entries[2].from_status(), Some(iron_defer_domain::TaskStatus::Running));
-    assert_eq!(entries.entries[2].to_status(), iron_defer_domain::TaskStatus::Completed);
+    assert_eq!(
+        entries.entries[2].from_status(),
+        Some(iron_defer_domain::TaskStatus::Running)
+    );
+    assert_eq!(
+        entries.entries[2].to_status(),
+        iron_defer_domain::TaskStatus::Completed
+    );
 }
 
 #[tokio::test]
@@ -95,8 +120,7 @@ async fn audit_lifecycle_with_retry() {
         .await
         .expect("enqueue");
 
-    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true))
-        as Arc<dyn TaskRepository>;
+    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true)) as Arc<dyn TaskRepository>;
 
     let qn = iron_defer_domain::QueueName::try_from(queue.as_str()).unwrap();
     let worker_id = iron_defer_domain::WorkerId::new();
@@ -128,24 +152,59 @@ async fn audit_lifecycle_with_retry() {
         .expect("available");
     repo.complete(reclaimed.id()).await.expect("complete");
 
-    let entries = repo.audit_log(record.id(), 100, 0).await.expect("audit_log");
-    assert_eq!(entries.entries.len(), 5, "expected 5 audit entries, got {}", entries.entries.len());
+    let entries = repo
+        .audit_log(record.id(), 100, 0)
+        .await
+        .expect("audit_log");
+    assert_eq!(
+        entries.entries.len(),
+        5,
+        "expected 5 audit entries, got {}",
+        entries.entries.len()
+    );
 
     assert!(entries.entries[0].from_status().is_none());
-    assert_eq!(entries.entries[0].to_status(), iron_defer_domain::TaskStatus::Pending);
+    assert_eq!(
+        entries.entries[0].to_status(),
+        iron_defer_domain::TaskStatus::Pending
+    );
 
-    assert_eq!(entries.entries[1].from_status(), Some(iron_defer_domain::TaskStatus::Pending));
-    assert_eq!(entries.entries[1].to_status(), iron_defer_domain::TaskStatus::Running);
+    assert_eq!(
+        entries.entries[1].from_status(),
+        Some(iron_defer_domain::TaskStatus::Pending)
+    );
+    assert_eq!(
+        entries.entries[1].to_status(),
+        iron_defer_domain::TaskStatus::Running
+    );
 
-    assert_eq!(entries.entries[2].from_status(), Some(iron_defer_domain::TaskStatus::Running));
-    assert_eq!(entries.entries[2].to_status(), iron_defer_domain::TaskStatus::Pending);
+    assert_eq!(
+        entries.entries[2].from_status(),
+        Some(iron_defer_domain::TaskStatus::Running)
+    );
+    assert_eq!(
+        entries.entries[2].to_status(),
+        iron_defer_domain::TaskStatus::Pending
+    );
     assert!(entries.entries[2].metadata().is_some());
 
-    assert_eq!(entries.entries[3].from_status(), Some(iron_defer_domain::TaskStatus::Pending));
-    assert_eq!(entries.entries[3].to_status(), iron_defer_domain::TaskStatus::Running);
+    assert_eq!(
+        entries.entries[3].from_status(),
+        Some(iron_defer_domain::TaskStatus::Pending)
+    );
+    assert_eq!(
+        entries.entries[3].to_status(),
+        iron_defer_domain::TaskStatus::Running
+    );
 
-    assert_eq!(entries.entries[4].from_status(), Some(iron_defer_domain::TaskStatus::Running));
-    assert_eq!(entries.entries[4].to_status(), iron_defer_domain::TaskStatus::Completed);
+    assert_eq!(
+        entries.entries[4].from_status(),
+        Some(iron_defer_domain::TaskStatus::Running)
+    );
+    assert_eq!(
+        entries.entries[4].to_status(),
+        iron_defer_domain::TaskStatus::Completed
+    );
 }
 
 #[tokio::test]
@@ -163,7 +222,10 @@ async fn audit_immutability_update_rejected() {
         .await
         .expect("enqueue");
 
-    let entries = engine.audit_log(record.id(), 100, 0).await.expect("audit_log");
+    let entries = engine
+        .audit_log(record.id(), 100, 0)
+        .await
+        .expect("audit_log");
     let audit_id = entries.entries[0].id();
 
     let err = sqlx::query("UPDATE task_audit_log SET to_status = 'hacked' WHERE id = $1")
@@ -173,7 +235,10 @@ async fn audit_immutability_update_rejected() {
 
     assert!(err.is_err(), "UPDATE on audit log should be rejected");
     let msg = err.unwrap_err().to_string();
-    assert!(msg.contains("append-only"), "error should mention append-only: {msg}");
+    assert!(
+        msg.contains("append-only"),
+        "error should mention append-only: {msg}"
+    );
 }
 
 #[tokio::test]
@@ -191,7 +256,10 @@ async fn audit_immutability_delete_rejected() {
         .await
         .expect("enqueue");
 
-    let entries = engine.audit_log(record.id(), 100, 0).await.expect("audit_log");
+    let entries = engine
+        .audit_log(record.id(), 100, 0)
+        .await
+        .expect("audit_log");
     let audit_id = entries.entries[0].id();
 
     let err = sqlx::query("DELETE FROM task_audit_log WHERE id = $1")
@@ -201,7 +269,10 @@ async fn audit_immutability_delete_rejected() {
 
     assert!(err.is_err(), "DELETE on audit log should be rejected");
     let msg = err.unwrap_err().to_string();
-    assert!(msg.contains("append-only"), "error should mention append-only: {msg}");
+    assert!(
+        msg.contains("append-only"),
+        "error should mention append-only: {msg}"
+    );
 }
 
 #[tokio::test]
@@ -221,17 +292,32 @@ async fn audit_cancel_produces_audit_row() {
 
     engine.cancel(record.id()).await.expect("cancel");
 
-    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true))
-        as Arc<dyn TaskRepository>;
+    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true)) as Arc<dyn TaskRepository>;
 
-    let entries = repo.audit_log(record.id(), 100, 0).await.expect("audit_log");
-    assert_eq!(entries.entries.len(), 2, "expected 2 audit entries (create + cancel)");
+    let entries = repo
+        .audit_log(record.id(), 100, 0)
+        .await
+        .expect("audit_log");
+    assert_eq!(
+        entries.entries.len(),
+        2,
+        "expected 2 audit entries (create + cancel)"
+    );
 
     assert!(entries.entries[0].from_status().is_none());
-    assert_eq!(entries.entries[0].to_status(), iron_defer::TaskStatus::Pending);
+    assert_eq!(
+        entries.entries[0].to_status(),
+        iron_defer::TaskStatus::Pending
+    );
 
-    assert_eq!(entries.entries[1].from_status(), Some(iron_defer::TaskStatus::Pending));
-    assert_eq!(entries.entries[1].to_status(), iron_defer::TaskStatus::Cancelled);
+    assert_eq!(
+        entries.entries[1].from_status(),
+        Some(iron_defer::TaskStatus::Pending)
+    );
+    assert_eq!(
+        entries.entries[1].to_status(),
+        iron_defer::TaskStatus::Cancelled
+    );
     assert!(entries.entries[1].worker_id().is_none());
 }
 
@@ -250,8 +336,8 @@ async fn audit_disabled_no_rows() {
         .await
         .expect("enqueue");
 
-    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), false))
-        as Arc<dyn TaskRepository>;
+    let repo =
+        Arc::new(PostgresTaskRepository::new(pool.clone(), false)) as Arc<dyn TaskRepository>;
 
     let qn = iron_defer_domain::QueueName::try_from(queue.as_str()).unwrap();
     let worker_id = iron_defer_domain::WorkerId::new();
@@ -264,13 +350,11 @@ async fn audit_disabled_no_rows() {
     repo.complete(claimed.id()).await.expect("complete");
 
     // Even if we query with audit=true, verify no rows were inserted
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM task_audit_log WHERE task_id = $1",
-    )
-    .bind(record.id().as_uuid())
-    .fetch_one(&pool)
-    .await
-    .expect("count query");
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM task_audit_log WHERE task_id = $1")
+        .bind(record.id().as_uuid())
+        .fetch_one(&pool)
+        .await
+        .expect("count query");
 
     assert_eq!(count, 0, "no audit rows should exist when audit_log=false");
 }
@@ -300,8 +384,7 @@ async fn audit_trace_id_correlation() {
         .await
         .expect("enqueue_raw");
 
-    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true))
-        as Arc<dyn TaskRepository>;
+    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true)) as Arc<dyn TaskRepository>;
 
     let qn = iron_defer_domain::QueueName::try_from(queue.as_str()).unwrap();
     let worker_id = iron_defer_domain::WorkerId::new();
@@ -313,7 +396,10 @@ async fn audit_trace_id_correlation() {
         .expect("available");
     repo.complete(claimed.id()).await.expect("complete");
 
-    let entries = repo.audit_log(record.id(), 100, 0).await.expect("audit_log");
+    let entries = repo
+        .audit_log(record.id(), 100, 0)
+        .await
+        .expect("audit_log");
     assert_eq!(entries.entries.len(), 3);
 
     for entry in &entries.entries {
@@ -335,8 +421,7 @@ async fn audit_atomicity_crosscheck() {
     let queue = common::unique_queue();
     let engine = build_engine(pool.clone(), true).await;
 
-    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true))
-        as Arc<dyn TaskRepository>;
+    let repo = Arc::new(PostgresTaskRepository::new(pool.clone(), true)) as Arc<dyn TaskRepository>;
 
     let qn = iron_defer_domain::QueueName::try_from(queue.as_str()).unwrap();
     let worker_id = iron_defer_domain::WorkerId::new();
@@ -364,7 +449,8 @@ async fn audit_atomicity_crosscheck() {
     for task_id in &task_ids {
         let entries = repo.audit_log(*task_id, 100, 0).await.expect("audit_log");
         assert_eq!(
-            entries.entries.len(), 3,
+            entries.entries.len(),
+            3,
             "task {} should have exactly 3 audit entries (create+claim+complete), got {}",
             task_id,
             entries.entries.len()

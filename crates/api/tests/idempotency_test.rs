@@ -195,14 +195,13 @@ async fn concurrent_idempotent_submits_create_exactly_one_task() {
     assert_eq!(task_ids.len(), 1, "all responses reference the same task");
 
     // Verify DB state: exactly 1 task
-    let (count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM tasks WHERE queue = $1 AND idempotency_key = $2",
-    )
-    .bind(&queue)
-    .bind(&key)
-    .fetch_one(&pool)
-    .await
-    .expect("count");
+    let (count,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE queue = $1 AND idempotency_key = $2")
+            .bind(&queue)
+            .bind(&key)
+            .fetch_one(&pool)
+            .await
+            .expect("count");
     assert_eq!(count, 1, "exactly 1 task in DB");
 }
 
@@ -250,7 +249,11 @@ async fn same_key_different_queues_creates_separate_tasks() {
         .await
         .expect("queue B");
 
-    assert_eq!(resp_b.status(), 201, "different queue should create new task");
+    assert_eq!(
+        resp_b.status(),
+        201,
+        "different queue should create new task"
+    );
     let body_b: serde_json::Value = resp_b.json().await.expect("json");
 
     assert_ne!(
@@ -340,39 +343,38 @@ async fn sweeper_cleans_expired_idempotency_keys() {
     .expect("insert expired task");
 
     // Verify the key is present before cleanup
-    let (pre_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM tasks WHERE id = $1 AND idempotency_key IS NOT NULL",
-    )
-    .bind(task_id)
-    .fetch_one(&pool)
-    .await
-    .expect("pre-count");
+    let (pre_count,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE id = $1 AND idempotency_key IS NOT NULL")
+            .bind(task_id)
+            .fetch_one(&pool)
+            .await
+            .expect("pre-count");
     assert_eq!(pre_count, 1, "key should be present before cleanup");
 
     // Run the sweeper cleanup directly via the repository
     let repo = iron_defer_infrastructure::PostgresTaskRepository::new(pool.clone(), false);
     use iron_defer_application::ports::TaskRepository;
-    let cleaned = repo.cleanup_expired_idempotency_keys().await.expect("cleanup");
+    let cleaned = repo
+        .cleanup_expired_idempotency_keys()
+        .await
+        .expect("cleanup");
     assert!(cleaned >= 1, "should clean at least 1 expired key");
 
     // Verify key is now NULL
-    let (post_count,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM tasks WHERE id = $1 AND idempotency_key IS NOT NULL",
-    )
-    .bind(task_id)
-    .fetch_one(&pool)
-    .await
-    .expect("post-count");
+    let (post_count,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE id = $1 AND idempotency_key IS NOT NULL")
+            .bind(task_id)
+            .fetch_one(&pool)
+            .await
+            .expect("post-count");
     assert_eq!(post_count, 0, "key should be NULLed after cleanup");
 
     // Verify the task record still exists (not deleted)
-    let (exists,): (i64,) = sqlx::query_as(
-        "SELECT COUNT(*) FROM tasks WHERE id = $1",
-    )
-    .bind(task_id)
-    .fetch_one(&pool)
-    .await
-    .expect("exists");
+    let (exists,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tasks WHERE id = $1")
+        .bind(task_id)
+        .fetch_one(&pool)
+        .await
+        .expect("exists");
     assert_eq!(exists, 1, "task record must still exist after key cleanup");
 }
 
@@ -422,7 +424,9 @@ async fn expired_key_allows_reuse_after_cleanup() {
     // Run sweeper cleanup to NULL the key
     let repo = iron_defer_infrastructure::PostgresTaskRepository::new(pool.clone(), false);
     use iron_defer_application::ports::TaskRepository;
-    repo.cleanup_expired_idempotency_keys().await.expect("cleanup");
+    repo.cleanup_expired_idempotency_keys()
+        .await
+        .expect("cleanup");
 
     // Submit again with the same key — should create a NEW task (201)
     let resp2 = client
@@ -436,7 +440,11 @@ async fn expired_key_allows_reuse_after_cleanup() {
         .send()
         .await
         .expect("reuse submit");
-    assert_eq!(resp2.status(), 201, "after cleanup the key should be reusable");
+    assert_eq!(
+        resp2.status(),
+        201,
+        "after cleanup the key should be reusable"
+    );
     let body2: serde_json::Value = resp2.json().await.expect("json");
     assert_ne!(
         body2["id"].as_str().unwrap(),
@@ -450,7 +458,7 @@ async fn expired_key_allows_reuse_after_cleanup() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn submit_with_oversized_idempotency_key_returns_400() {
+async fn submit_with_oversized_idempotency_key_returns_422() {
     let Some(pool) = common::fresh_pool_on_shared_container().await else {
         eprintln!("[skip] Docker not available");
         return;
@@ -473,8 +481,15 @@ async fn submit_with_oversized_idempotency_key_returns_400() {
         .await
         .expect("submit");
 
-    assert_eq!(resp.status(), 400, "oversized key should return 400 Bad Request");
+    assert_eq!(
+        resp.status(),
+        422,
+        "oversized key should return 422 Unprocessable Entity"
+    );
     let body: serde_json::Value = resp.json().await.expect("json");
-    let message = body["message"].as_str().expect("message must be string");
+    assert_eq!(body["error"]["code"], "INVALID_PAYLOAD");
+    let message = body["error"]["message"]
+        .as_str()
+        .expect("error.message must be string");
     assert!(message.contains("idempotency key length 251 exceeds maximum of 250 characters"));
 }
