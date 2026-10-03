@@ -130,14 +130,18 @@ async fn e2e_concurrent_signal_race() {
                 .await
         }));
     }
-    let mut successes = 0;
+    let mut statuses = Vec::new();
     for h in handles {
-        let result = h.await.unwrap().unwrap();
-        if result.status() == 200 {
-            successes += 1;
-        }
+        statuses.push(h.await.unwrap().unwrap().status().as_u16());
     }
-    assert_eq!(successes, 1, "exactly one signal should succeed");
+    statuses.sort_unstable();
+    // Losers must get 409, not a 500 from connection-pool exhaustion
+    // (the per-test pool has only 2 connections).
+    assert_eq!(
+        statuses,
+        [200, 409, 409, 409, 409, 409, 409, 409, 409, 409],
+        "exactly one signal should succeed and the rest should conflict"
+    );
 
     // Verify task reaches Completed
     wait_for_status(

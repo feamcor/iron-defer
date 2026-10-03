@@ -1606,10 +1606,13 @@ impl TaskRepository for PostgresTaskRepository {
                 Ok(TaskRecord::try_from(r)?)
             }
             None => {
-                // Check if it's 404 (not exists) or 409 (exists but not suspended)
+                // Check if it's 404 (not exists) or 409 (exists but not suspended).
+                // Reuse the open transaction's connection: acquiring a second one
+                // while holding `tx` can exhaust a small pool under concurrent
+                // signals and deadlock until the acquire timeout.
                 let exists =
                     sqlx::query_scalar!("SELECT 1 FROM tasks WHERE id = $1", task_id.as_uuid())
-                        .fetch_optional(&self.pool)
+                        .fetch_optional(&mut *tx)
                         .await
                         .map_err(PostgresAdapterError::from)?;
 
