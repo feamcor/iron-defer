@@ -88,9 +88,7 @@ where
 ///
 /// On success, the installed [`SdkTracerProvider`] is returned so the
 /// caller can flush buffered spans on shutdown via
-/// [`SdkTracerProvider::shutdown`]. `opentelemetry` 0.33 removed the
-/// global `shutdown_tracer_provider()` helper, so the owner of the
-/// provider is responsible for shutting it down.
+/// [`SdkTracerProvider::shutdown`].
 ///
 /// # Errors
 ///

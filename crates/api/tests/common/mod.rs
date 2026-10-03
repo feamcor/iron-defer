@@ -8,18 +8,15 @@
 
 pub mod e2e;
 pub mod otel;
+pub mod postgres;
 
 use iron_defer::IronDefer;
 use sqlx::PgPool;
-use testcontainers::{ContainerAsync, ImageExt};
+use testcontainers::ContainerAsync;
 use testcontainers_modules::postgres::Postgres;
 use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use tokio::sync::OnceCell;
 use uuid::Uuid;
-
-/// Pinned Postgres image tag for test containers. `testcontainers-modules`
-/// defaults to `11-alpine`; keep tests aligned with the compose/CI version.
-const POSTGRES_TAG: &str = "18-alpine";
 
 #[allow(dead_code)]
 static TEST_DB: OnceCell<Option<TestDb>> = OnceCell::const_new();
@@ -70,7 +67,7 @@ pub async fn test_pool() -> Option<&'static PgPool> {
 /// container has migrations applied permanently after the first test.
 #[allow(dead_code)]
 pub async fn fresh_unmigrated_pool() -> Option<(PgPool, ContainerAsync<Postgres>)> {
-    match Postgres::default().with_tag(POSTGRES_TAG).start().await {
+    match postgres::postgres_image().start().await {
         Ok(container) => {
             let port = match container.get_host_port_ipv4(5432).await {
                 Ok(p) => p,
@@ -96,7 +93,7 @@ pub async fn fresh_unmigrated_pool() -> Option<(PgPool, ContainerAsync<Postgres>
 }
 
 async fn boot_test_db() -> Result<TestDb, Box<dyn std::error::Error + Send + Sync>> {
-    let container = Postgres::default().with_tag(POSTGRES_TAG).start().await?;
+    let container = postgres::postgres_image().start().await?;
     let port = container.get_host_port_ipv4(5432).await?;
     let url = format!("postgres://postgres:postgres@127.0.0.1:{port}/postgres");
     // Larger pool for shared integration tests — multiple engines + sweepers

@@ -18,8 +18,9 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use iron_defer_domain::{
-    AttemptCount, CancelResult, ListTasksFilter, ListTasksResult, MaxAttempts, Priority, QueueName,
-    QueueStatistics, TaskError, TaskId, TaskKind, TaskRecord, TaskStatus, WorkerStatus,
+    AttemptCount, CancelResult, ListTasksFilter, ListTasksResult, MaxAttempts, PayloadErrorKind,
+    Priority, QueueName, QueueStatistics, TaskError, TaskId, TaskKind, TaskRecord, TaskStatus,
+    WorkerStatus,
 };
 use tracing::instrument;
 
@@ -77,20 +78,11 @@ impl SchedulerService {
         scheduled_at: Option<DateTime<Utc>>,
         region: Option<&str>,
     ) -> Result<TaskRecord, TaskError> {
-        use iron_defer_domain::PayloadErrorKind;
         let tx_repo = self.tx_repo.as_ref().ok_or_else(|| TaskError::Storage {
             source: "transactional repository not configured".into(),
         })?;
 
-        if let Some(r) = region
-            && r.is_empty()
-        {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "region label must not be empty".to_owned(),
-                },
-            });
-        }
+        reject_empty_region(region)?;
 
         let now = Utc::now();
         let scheduled = scheduled_at.unwrap_or(now);
@@ -134,36 +126,15 @@ impl SchedulerService {
         retention: Duration,
         region: Option<&str>,
     ) -> Result<(TaskRecord, bool), TaskError> {
-        use iron_defer_domain::PayloadErrorKind;
         let tx_repo = self.tx_repo.as_ref().ok_or_else(|| TaskError::Storage {
             source: "transactional repository not configured".into(),
         })?;
 
-        if let Some(r) = region
-            && r.is_empty()
-        {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "region label must not be empty".to_owned(),
-                },
-            });
-        }
+        reject_empty_region(region)?;
 
         let now = Utc::now();
         let scheduled = scheduled_at.unwrap_or(now);
-        let retention_delta =
-            chrono::Duration::from_std(retention).map_err(|e| TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!("invalid idempotency retention duration: {e}"),
-                },
-            })?;
-        let expires_at =
-            now.checked_add_signed(retention_delta)
-                .ok_or_else(|| TaskError::InvalidPayload {
-                    kind: PayloadErrorKind::Validation {
-                        message: "idempotency retention duration causes overflow".to_owned(),
-                    },
-                })?;
+        let expires_at = idempotency_expires_at(now, retention)?;
 
         let record = TaskRecord::builder()
             .id(TaskId::new())
@@ -212,17 +183,7 @@ impl SchedulerService {
         trace_id: Option<&str>,
         region: Option<&str>,
     ) -> Result<TaskRecord, TaskError> {
-        use iron_defer_domain::PayloadErrorKind;
-
-        if let Some(r) = region
-            && r.is_empty()
-        {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "region label must not be empty".to_owned(),
-                },
-            });
-        }
+        reject_empty_region(region)?;
 
         let now = Utc::now();
         let scheduled = scheduled_at.unwrap_or(now);
@@ -308,33 +269,11 @@ impl SchedulerService {
         trace_id: Option<&str>,
         region: Option<&str>,
     ) -> Result<(TaskRecord, bool), TaskError> {
-        use iron_defer_domain::PayloadErrorKind;
-
-        if let Some(r) = region
-            && r.is_empty()
-        {
-            return Err(TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: "region label must not be empty".to_owned(),
-                },
-            });
-        }
+        reject_empty_region(region)?;
 
         let now = Utc::now();
         let scheduled = scheduled_at.unwrap_or(now);
-        let retention_delta =
-            chrono::Duration::from_std(retention).map_err(|e| TaskError::InvalidPayload {
-                kind: PayloadErrorKind::Validation {
-                    message: format!("invalid idempotency retention duration: {e}"),
-                },
-            })?;
-        let expires_at =
-            now.checked_add_signed(retention_delta)
-                .ok_or_else(|| TaskError::InvalidPayload {
-                    kind: PayloadErrorKind::Validation {
-                        message: "idempotency retention duration causes overflow".to_owned(),
-                    },
-                })?;
+        let expires_at = idempotency_expires_at(now, retention)?;
 
         let prio = priority.map_or(DEFAULT_PRIORITY, Priority::new);
         let max = if let Some(v) = max_attempts {
@@ -426,13 +365,13 @@ impl SchedulerService {
     ) -> Result<TaskRecord, TaskError> {
         if let Some(ref p) = payload {
             let bytes = serde_json::to_vec(p).map_err(|e| TaskError::InvalidPayload {
-                kind: iron_defer_domain::PayloadErrorKind::Serialization {
+                kind: PayloadErrorKind::Serialization {
                     message: format!("failed to serialize signal payload: {e}"),
                 },
             })?;
             if bytes.len() > iron_defer_domain::SIGNAL_PAYLOAD_MAX_BYTES {
                 return Err(TaskError::InvalidPayload {
-                    kind: iron_defer_domain::PayloadErrorKind::Validation {
+                    kind: PayloadErrorKind::Validation {
                         message: format!(
                             "signal payload size {} exceeds maximum {} bytes",
                             bytes.len(),
@@ -444,6 +383,35 @@ impl SchedulerService {
         }
         self.repo.signal(task_id, payload).await
     }
+}
+
+fn reject_empty_region(region: Option<&str>) -> Result<(), TaskError> {
+    if region.is_some_and(str::is_empty) {
+        return Err(TaskError::InvalidPayload {
+            kind: PayloadErrorKind::Validation {
+                message: "region label must not be empty".to_owned(),
+            },
+        });
+    }
+    Ok(())
+}
+
+fn idempotency_expires_at(
+    now: DateTime<Utc>,
+    retention: Duration,
+) -> Result<DateTime<Utc>, TaskError> {
+    let retention_delta =
+        chrono::Duration::from_std(retention).map_err(|e| TaskError::InvalidPayload {
+            kind: PayloadErrorKind::Validation {
+                message: format!("invalid idempotency retention duration: {e}"),
+            },
+        })?;
+    now.checked_add_signed(retention_delta)
+        .ok_or_else(|| TaskError::InvalidPayload {
+            kind: PayloadErrorKind::Validation {
+                message: "idempotency retention duration causes overflow".to_owned(),
+            },
+        })
 }
 
 #[cfg(test)]

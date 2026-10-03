@@ -1089,7 +1089,6 @@ impl TaskRepository for PostgresTaskRepository {
              GROUP BY queue, region \
              HAVING COUNT(*) FILTER (WHERE status IN ('pending', 'running', 'suspended')) > 0 \
              ORDER BY queue, region"
-                .to_string()
         } else {
             "SELECT \
                  queue, \
@@ -1102,10 +1101,9 @@ impl TaskRepository for PostgresTaskRepository {
              GROUP BY queue \
              HAVING COUNT(*) FILTER (WHERE status IN ('pending', 'running', 'suspended')) > 0 \
              ORDER BY queue"
-                .to_string()
         };
 
-        let rows: Vec<QueueStatsRow> = sqlx::query_as(sqlx::AssertSqlSafe(sql.as_str()))
+        let rows: Vec<QueueStatsRow> = sqlx::query_as(sql)
             .fetch_all(&self.pool)
             .await
             .map_err(PostgresAdapterError::from)?;

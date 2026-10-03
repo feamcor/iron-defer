@@ -4,15 +4,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use iron_defer::{IronDefer, Task, WorkerConfig};
-use opentelemetry::global;
 use opentelemetry::trace::TraceId;
-use opentelemetry_sdk::trace::InMemorySpanExporter;
-use opentelemetry_sdk::trace::SdkTracerProvider;
 use serde_json::json;
 use serial_test::serial;
 
 use common::e2e::{self, E2eTask, RetryCountingTask};
-use common::otel::build_harness;
+use common::otel::{build_harness, install_in_memory_tracer};
 
 const TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -134,24 +131,6 @@ async fn boot_trace_e2e_server(queue: &str) -> Option<(e2e::TestServer, sqlx::Pg
     ))
 }
 
-struct TracerGuard;
-impl TracerGuard {
-    fn init() -> (InMemorySpanExporter, SdkTracerProvider) {
-        let exporter = InMemorySpanExporter::default();
-        let provider = SdkTracerProvider::builder()
-            .with_simple_exporter(exporter.clone())
-            .build();
-        global::set_tracer_provider(provider.clone());
-        (exporter, provider)
-    }
-}
-impl Drop for TracerGuard {
-    fn drop(&mut self) {
-        // Do not shutdown global provider as it breaks subsequent serial tests
-        // global::shutdown_tracer_provider();
-    }
-}
-
 #[tokio::test]
 #[serial]
 async fn e2e_trace_propagation_single_task() {
@@ -160,8 +139,7 @@ async fn e2e_trace_propagation_single_task() {
         return;
     };
 
-    let (exporter, provider) = TracerGuard::init();
-    let _guard = TracerGuard;
+    let (exporter, provider) = install_in_memory_tracer();
 
     let queue = common::unique_queue();
     let (engine, token, handle) = boot_trace_engine(pool.clone(), &queue).await;
@@ -225,8 +203,7 @@ async fn e2e_trace_propagation_across_retries() {
         return;
     };
 
-    let (exporter, provider) = TracerGuard::init();
-    let _guard = TracerGuard;
+    let (exporter, provider) = install_in_memory_tracer();
 
     let queue = common::unique_queue();
     let (engine, token, handle) = boot_trace_engine(pool.clone(), &queue).await;
@@ -308,8 +285,7 @@ async fn e2e_no_trace_without_traceparent() {
         return;
     };
 
-    let (exporter, provider) = TracerGuard::init();
-    let _guard = TracerGuard;
+    let (exporter, provider) = install_in_memory_tracer();
 
     let queue = common::unique_queue();
     let (engine, token, handle) = boot_trace_engine(pool.clone(), &queue).await;
@@ -360,8 +336,7 @@ async fn e2e_otel_events_emitted_for_transitions() {
         return;
     };
 
-    let (exporter, provider) = TracerGuard::init();
-    let _guard = TracerGuard;
+    let (exporter, provider) = install_in_memory_tracer();
 
     let queue = common::unique_queue();
     let (engine, token, handle) = boot_trace_engine(pool.clone(), &queue).await;
@@ -456,8 +431,7 @@ async fn e2e_trace_propagation_via_rest_api() {
         return;
     };
 
-    let (exporter, provider) = TracerGuard::init();
-    let _guard = TracerGuard;
+    let (exporter, provider) = install_in_memory_tracer();
 
     let trace_id_hex = "deadbeef12345678deadbeef12345678";
     let client = reqwest::Client::new();

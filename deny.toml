@@ -61,9 +61,6 @@ license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
 # vulnerabilities always fail, and `unmaintained` now selects the scope of
 # crates whose unmaintained advisories fail the check.
 unmaintained = "all"
-# The protobuf 2.x, tokio-tar, and rustls-pemfile advisories that were
-# previously ignored are no longer present in the resolved graph after the
-# 2026 dependency refresh, so no ignores are needed.
 
 [bans]
 multiple-versions = "allow"

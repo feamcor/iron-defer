@@ -62,38 +62,14 @@ pub async fn shutdown_signal() {
     }
 }
 
-/// Flush and shut down an `OTel` tracer provider.
+/// Flush and shut down an `OTel` provider (meter or tracer) on process exit,
+/// logging the outcome.
 ///
-/// Ensures traces are flushed before exit. Because `opentelemetry` 0.33
-/// removed the global `shutdown_tracer_provider()` helper, the provider
-/// handle returned by the tracing initializer must be passed in via the
-/// closure — mirroring [`shutdown_meter_provider`].
-pub fn shutdown_tracer_provider<F, E>(shutdown_fn: F)
-where
-    F: FnOnce() -> Result<(), E>,
-    E: std::fmt::Display,
-{
-    shutdown_observability(shutdown_fn);
-}
-
-/// Flush buffered `OTel` metric exports on process shutdown.
-///
-/// Must be called AFTER the engine drain completes (so any final metric
-/// emissions are captured) and BEFORE process exit (so any OTLP
-/// `PeriodicReader` flushes its send queue). This must be wired through
-/// to be wired through the shutdown flow rather than dropped silently in
-/// `main`. The argument is a closure so this helper stays independent of
-/// `opentelemetry_sdk` types — the embedded library crate does not carry
-/// an SDK dependency.
-pub fn shutdown_meter_provider<F, E>(shutdown_fn: F)
-where
-    F: FnOnce() -> Result<(), E>,
-    E: std::fmt::Display,
-{
-    shutdown_observability(shutdown_fn);
-}
-
-/// Generic wrapper for observability provider shutdown.
+/// Must be called AFTER the engine drain completes (so any final metric and
+/// span emissions are captured) and BEFORE process exit (so any OTLP
+/// exporter flushes its send queue). The argument is a closure so this
+/// helper stays independent of `opentelemetry_sdk` types — the embedded
+/// library crate does not carry an SDK dependency.
 pub fn shutdown_observability<F, E>(shutdown_fn: F)
 where
     F: FnOnce() -> Result<(), E>,

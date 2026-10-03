@@ -4,15 +4,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use iron_defer::{IronDefer, Task, TaskContext, TaskError, WorkerConfig};
-use opentelemetry::global;
 use opentelemetry::trace::TraceId;
-use opentelemetry_sdk::trace::InMemorySpanExporter;
-use opentelemetry_sdk::trace::SdkTracerProvider;
 use serde::{Deserialize, Serialize};
 use serial_test::serial;
 use tokio_util::sync::CancellationToken;
 
-use common::otel::build_harness;
+use common::otel::{build_harness, install_in_memory_tracer};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct TraceEcho;
@@ -144,11 +141,7 @@ async fn span_created_with_correct_trace_id_and_attributes() {
         return;
     };
 
-    let exporter = InMemorySpanExporter::default();
-    let provider = SdkTracerProvider::builder()
-        .with_simple_exporter(exporter.clone())
-        .build();
-    global::set_tracer_provider(provider.clone());
+    let (exporter, provider) = install_in_memory_tracer();
 
     let queue = common::unique_queue();
     let engine = build_engine(pool.clone(), &queue).await;
@@ -224,11 +217,7 @@ async fn no_span_created_without_trace_id() {
         return;
     };
 
-    let exporter = InMemorySpanExporter::default();
-    let provider = SdkTracerProvider::builder()
-        .with_simple_exporter(exporter.clone())
-        .build();
-    global::set_tracer_provider(provider.clone());
+    let (exporter, provider) = install_in_memory_tracer();
 
     let queue = common::unique_queue();
     let engine = build_engine(pool.clone(), &queue).await;
@@ -283,11 +272,7 @@ async fn retry_spans_share_same_trace_id() {
         return;
     };
 
-    let exporter = InMemorySpanExporter::default();
-    let provider = SdkTracerProvider::builder()
-        .with_simple_exporter(exporter.clone())
-        .build();
-    global::set_tracer_provider(provider.clone());
+    let (exporter, provider) = install_in_memory_tracer();
 
     let queue = common::unique_queue();
 

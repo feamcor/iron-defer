@@ -9,7 +9,7 @@
 use clap::Parser;
 use iron_defer::cli::{Cli, Command, Serve};
 use iron_defer::config;
-use iron_defer::shutdown::{shutdown_meter_provider, shutdown_tracer_provider};
+use iron_defer::shutdown::shutdown_observability;
 use iron_defer_infrastructure::{init_metrics, init_tracing};
 use opentelemetry::metrics::MeterProvider;
 
@@ -160,8 +160,8 @@ fn run_serve(cli: &Cli, serve: &Serve) -> Result<(), Box<dyn std::error::Error>>
         Ok::<(), Box<dyn std::error::Error>>(())
     })?;
 
-    shutdown_meter_provider(|| meter_provider.shutdown());
-    shutdown_tracer_provider(|| tracer_provider.shutdown());
+    shutdown_observability(|| meter_provider.shutdown());
+    shutdown_observability(|| tracer_provider.shutdown());
     Ok(())
 }
 

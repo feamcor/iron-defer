@@ -27,6 +27,7 @@ use std::time::Duration;
 use iron_defer::{IronDefer, Metrics, TaskStatus, create_metrics};
 use opentelemetry::metrics::MeterProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
 use prometheus::{Registry, TextEncoder};
 use tokio_util::sync::CancellationToken;
 
@@ -269,4 +270,19 @@ pub fn find_sample<'a>(
                 .iter()
                 .all(|(k, v)| s.labels.get(*k).map(String::as_str) == Some(*v))
     })
+}
+
+/// Install an in-memory span exporter as the global `OTel` tracer provider.
+///
+/// The provider is intentionally never shut down: shutting down the global
+/// provider breaks subsequent `#[serial]` tests in the same binary.
+#[must_use]
+#[allow(dead_code)]
+pub fn install_in_memory_tracer() -> (InMemorySpanExporter, SdkTracerProvider) {
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    opentelemetry::global::set_tracer_provider(provider.clone());
+    (exporter, provider)
 }
