@@ -175,13 +175,7 @@ async fn checkpoint_persists_and_survives_retry() {
         e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let row: Option<(Option<serde_json::Value>,)> =
-        sqlx::query_as("SELECT checkpoint FROM tasks WHERE id = $1")
-            .bind(uuid::Uuid::parse_str(&task_id).unwrap())
-            .fetch_optional(&pool)
-            .await
-            .expect("query");
-    let checkpoint = row.expect("task exists").0;
+    let checkpoint = e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
     assert!(
         checkpoint.is_none(),
         "checkpoint should be cleared after completion"
@@ -227,14 +221,9 @@ async fn checkpoint_cleared_on_completion() {
         e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let row: (Option<serde_json::Value>,) =
-        sqlx::query_as("SELECT checkpoint FROM tasks WHERE id = $1")
-            .bind(uuid::Uuid::parse_str(&task_id).unwrap())
-            .fetch_one(&pool)
-            .await
-            .expect("query");
+    let checkpoint = e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
     assert!(
-        row.0.is_none(),
+        checkpoint.is_none(),
         "checkpoint should be NULL after completion"
     );
 
@@ -303,14 +292,9 @@ async fn checkpoint_multiple_overwrites() {
         e2e::wait_for_status(&client, &server.base_url, &task_id, "completed", TIMEOUT).await;
     assert_eq!(result["status"], "completed");
 
-    let row: (Option<serde_json::Value>,) =
-        sqlx::query_as("SELECT checkpoint FROM tasks WHERE id = $1")
-            .bind(uuid::Uuid::parse_str(&task_id).unwrap())
-            .fetch_one(&pool)
-            .await
-            .expect("query");
+    let checkpoint = e2e::query_checkpoint(&pool, uuid::Uuid::parse_str(&task_id).unwrap()).await;
     assert!(
-        row.0.is_none(),
+        checkpoint.is_none(),
         "checkpoint should be cleared after completion (was overwritten 5 times during execution)"
     );
 
